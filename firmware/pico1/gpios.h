@@ -18,7 +18,7 @@
 #define GPIO_INPUT1      21
 
 /* Pico2 to Pico1 signal, telling Pico 1 the address bus is set or not */
-#define GPIO_P2_LINKOUT  18
+#define GPIO_P2_SIGNAL   18
 
 /* Output, holds Z80 in reset */
 #define GPIO_Z80_RESET   22

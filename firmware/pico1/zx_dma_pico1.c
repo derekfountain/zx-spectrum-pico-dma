@@ -59,7 +59,7 @@ void main( void )
   gpio_init( GPIO_P1_SIGNAL );  gpio_set_dir( GPIO_P1_SIGNAL, GPIO_OUT ); gpio_put( GPIO_P1_SIGNAL, 0 );
 
   /* Set up incoming signal from the other Pico telling us that it's controlling the address bus */
-  gpio_init( GPIO_P2_LINKOUT ); gpio_set_dir( GPIO_P2_LINKOUT, GPIO_IN );
+  gpio_init( GPIO_P2_SIGNAL ); gpio_set_dir( GPIO_P2_SIGNAL, GPIO_IN );
 
   gpio_init( GPIO_DBUS_D0  );   gpio_set_dir( GPIO_DBUS_D0,  GPIO_IN );
   gpio_init( GPIO_DBUS_D1  );   gpio_set_dir( GPIO_DBUS_D1,  GPIO_IN );
@@ -118,7 +118,7 @@ void main( void )
      * Pico to confirm it's done it
      */
     gpio_put( GPIO_P1_SIGNAL, 1 );
-    while( gpio_get( GPIO_P2_LINKOUT ) == 0 );
+    while( gpio_get( GPIO_P2_SIGNAL ) == 0 );
 
     /*
      * We've just had the rising edge of Z80 clock T1. Wait for it to fall
@@ -169,7 +169,7 @@ void main( void )
      * the other Pico to signal it's released the address bus
      */
     gpio_put( GPIO_P1_SIGNAL, 0 );
-    while( gpio_get( GPIO_P2_LINKOUT ) == 1 );
+    while( gpio_get( GPIO_P2_SIGNAL ) == 1 );
 
     /* Put the data and control buses back to hi-Z */
     gpio_set_dir( GPIO_DBUS_D0,  GPIO_IN );
