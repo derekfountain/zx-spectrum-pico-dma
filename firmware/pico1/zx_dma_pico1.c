@@ -48,6 +48,111 @@ static void test_blipper( void )
   gpio_put( GPIO_P1_BLIPPER, 0 );
 }
 
+/*
+ * Callback here means INT signal from Z80 - indicates top border time is starting.
+ *
+ * https://worldofspectrum.org/faq/reference/48kreference.htm
+ *
+ * Spectrum top border time is 64 line times, which is 14336 T states. That's
+ * 0.004096 of a second, or a smidge over 4ms. This routine needs to run in
+ * that time, otherwise contention comes into play, not to mention the Z80
+ * potentially writing to screen memory.
+ */
+void int_callback( uint gpio, uint32_t events ) 
+{
+  /* Assert bus request */
+  gpio_set_dir( GPIO_Z80_BUSREQ, GPIO_OUT ); gpio_put( GPIO_Z80_BUSREQ, 0 );
+
+  /*
+   * Spin waiting for Z80 to acknowledge. BUSACK goes active (low) on the 
+   * rising edge of the clock - see fig8 in the Z80 manual
+   */
+  while( gpio_get( GPIO_Z80_BUSACK ) == 1 );
+
+  /* Blipper goes high while DMA process is active */
+  gpio_put( GPIO_P1_BLIPPER, 1 );
+
+  /* Approx 1.2uS passes while the RP2040 waits for the Z80 to BUSACK */
+
+  /* RD and IORQ lines are unused and stay inactive */
+  gpio_set_dir( GPIO_Z80_RD,   GPIO_OUT ); gpio_put( GPIO_Z80_RD,   1 );
+  gpio_set_dir( GPIO_Z80_IORQ, GPIO_OUT ); gpio_put( GPIO_Z80_IORQ, 1 );
+
+  /*
+   * Moving on to the right hand side of fig7 in the Z80 manual.
+   * We're at the start of T1.
+   *
+   * Set address bus (active high signal to other Pico), then wait for other
+   * Pico to confirm it's done it
+   */
+  gpio_put( GPIO_P1_SIGNAL, 1 );
+  while( gpio_get( GPIO_P2_SIGNAL ) == 0 );
+
+  /*
+   * We've just had the rising edge of Z80 clock T1. Wait for it to fall
+   * which puts us halfway through T1
+   */
+  while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+
+  /* Assert memory request */
+  gpio_set_dir( GPIO_Z80_MREQ, GPIO_OUT ); gpio_put( GPIO_Z80_MREQ, 0 );
+
+  /* Put 0x55 on the data bus */
+  gpio_set_dir_out_masked( GPIO_DBUS_BITMASK );
+  gpio_put_masked( GPIO_DBUS_BITMASK, 0x00000055);
+
+  /*
+   * Wait for Z80 clock to rise and fall - that's the start of T2, then
+   * at the clock low point halfway through T2
+   */
+  while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+  while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+
+  /* Assert the write line to write it */
+  gpio_set_dir( GPIO_Z80_WR, GPIO_OUT ); gpio_put( GPIO_Z80_WR, 0 );
+
+  /* Wait for Z80 clock rising edge, that's the start of T3 */
+  while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+
+  /* Wait for Z80 clock falling edge, that's halfway through T3 */
+  while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+
+  /* Remove write and memory request */
+  gpio_put( GPIO_Z80_WR,   1 );
+  gpio_put( GPIO_Z80_MREQ, 1 ); 
+    
+  /* Wait for Z80 clock rising edge, that's the end of T3 */
+  while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+
+  /*
+   * Write cycle is complete. Clean everything up.
+   *
+   * Remove address bus (active high signal to other Pico). This isn't
+   * used at this point, the other Pico will have stopped driving the
+   * address bus when the MREQ signal was turned off (just above). So
+   * turning this signal off is just housekeeping at this point.
+   */
+  gpio_put( GPIO_P1_SIGNAL, 0 );
+
+  /* Put the data and control buses back to hi-Z */
+  gpio_set_dir_in_masked( GPIO_DBUS_BITMASK );
+
+  gpio_set_dir( GPIO_Z80_MREQ, GPIO_IN );
+  gpio_set_dir( GPIO_Z80_WR,   GPIO_IN );
+  gpio_set_dir( GPIO_Z80_IORQ, GPIO_IN );
+  gpio_set_dir( GPIO_Z80_RD,   GPIO_IN );
+
+  /*
+   * DMA complete.
+   *
+   * Release bus request
+   */
+  gpio_put( GPIO_Z80_BUSREQ, 1 );
+
+  /* Indicate DMA process complete */
+  gpio_put( GPIO_P1_BLIPPER, 0 );
+}
+
 void main( void )
 {
   bi_decl(bi_program_description("ZX Spectrum DMA Pico1 Board Binary."));
@@ -75,7 +180,9 @@ void main( void )
   gpio_init( GPIO_Z80_WR   );   gpio_set_dir( GPIO_Z80_WR,   GPIO_IN );
   gpio_init( GPIO_Z80_M1   );   gpio_set_dir( GPIO_Z80_M1,   GPIO_IN );
   gpio_init( GPIO_Z80_CLK  );   gpio_set_dir( GPIO_Z80_CLK,  GPIO_IN );
+
   gpio_init( GPIO_Z80_INT  );   gpio_set_dir( GPIO_Z80_INT,  GPIO_IN );
+  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
   const uint LED_PIN = PICO_DEFAULT_LED_PIN;
   gpio_init(LED_PIN);
@@ -83,109 +190,7 @@ void main( void )
 
   while( 1 )
   {
-    /* Wait for INT signal from Z80 - indicates top border time is starting */
-    while( gpio_get( GPIO_Z80_INT ) == 1 );
-
-    /* Approx 150ns to 200ns passes while the RP2040 spots the /INT */
-
-    /* Assert bus request */
-    gpio_set_dir( GPIO_Z80_BUSREQ, GPIO_OUT ); gpio_put( GPIO_Z80_BUSREQ, 0 );
-
-    /*
-     * Spin waiting for Z80 to acknowledge. BUSACK goes active (low) on the 
-     * rising edge of the clock - see fig8 in the Z80 manual
-     */
-    while( gpio_get( GPIO_Z80_BUSACK ) == 1 );
-
-    /* Blipper goes high while DMA process is active */
-    gpio_put( GPIO_P1_BLIPPER, 1 );
-
-    /* Approx 1.2uS passes while the RP2040 waits for the Z80 to BUSACK */
-
-    /* RD and IORQ lines are unused and stay inactive */
-    gpio_set_dir( GPIO_Z80_RD,   GPIO_OUT ); gpio_put( GPIO_Z80_RD,   1 );
-    gpio_set_dir( GPIO_Z80_IORQ, GPIO_OUT ); gpio_put( GPIO_Z80_IORQ, 1 );
-
-    /*
-     * Moving on to the right hand side of fig7 in the Z80 manual.
-     * We're at the start of T1.
-     *
-     * Set address bus (active high signal to other Pico), then wait for other
-     * Pico to confirm it's done it
-     */
-    gpio_put( GPIO_P1_SIGNAL, 1 );
-    while( gpio_get( GPIO_P2_SIGNAL ) == 0 );
-
-    /*
-     * We've just had the rising edge of Z80 clock T1. Wait for it to fall
-     * which puts us halfway through T1
-     */
-    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
-
-    /* Assert memory request */
-    gpio_set_dir( GPIO_Z80_MREQ, GPIO_OUT ); gpio_put( GPIO_Z80_MREQ, 0 );
-
-    /* Put 0x55 on the data bus */
-    gpio_set_dir_out_masked( GPIO_DBUS_BITMASK );
-    gpio_put_masked( GPIO_DBUS_BITMASK, 0x00000055);
-
-    /*
-     * Wait for Z80 clock to rise and fall - that's the start of T2, then
-     * at the clock low point halfway through T2
-     */
-    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
-    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
-
-    /* Assert the write line to write it */
-    gpio_set_dir( GPIO_Z80_WR, GPIO_OUT ); gpio_put( GPIO_Z80_WR, 0 );
-
-    /* Wait for Z80 clock rising edge, that's the start of T3 */
-    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
-
-    /* Wait for Z80 clock falling edge, that's halfway through T3 */
-    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
-
-    /* Remove write and memory request */
-    gpio_put( GPIO_Z80_WR,   1 );
-    gpio_put( GPIO_Z80_MREQ, 1 ); 
-    
-    /* Wait for Z80 clock rising edge, that's the end of T3 */
-    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
-
-    /*
-     * Write cycle is complete. Clean everything up.
-     *
-     * Remove address bus (active high signal to other Pico). This isn't
-     * used at this point, the other Pico will have stopped driving the
-     * address bus when the MREQ signal was turned off (just above). So
-     * turning this signal off is just housekeeping at this point.
-     */
-    gpio_put( GPIO_P1_SIGNAL, 0 );
-
-    /* Put the data and control buses back to hi-Z */
-    gpio_set_dir_in_masked( GPIO_DBUS_BITMASK );
-
-    gpio_set_dir( GPIO_Z80_MREQ, GPIO_IN );
-    gpio_set_dir( GPIO_Z80_WR,   GPIO_IN );
-    gpio_set_dir( GPIO_Z80_IORQ, GPIO_IN );
-    gpio_set_dir( GPIO_Z80_RD,   GPIO_IN );
-
-    /*
-     * DMA complete.
-     *
-     * Release bus request
-     */
-    gpio_put( GPIO_Z80_BUSREQ, 1 );
-
-    /* Indicate DMA process complete */
-    gpio_put( GPIO_P1_BLIPPER, 0 );
-
-    /*
-     * The INT signal from the ULA lasts 10uS. This current DMA experiment
-     * code is way quicker than that, so INT will still be active (low).
-     * So wait for it to finish and go high again.
-     */
-    while( gpio_get( GPIO_Z80_INT ) == 0 );
+    sleep_ms(5);
   }
 
 }

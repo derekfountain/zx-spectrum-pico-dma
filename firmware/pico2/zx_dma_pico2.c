@@ -74,6 +74,9 @@ void main( void )
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
+  uint32_t write_address = 0x4000;
+  uint32_t write_counter = 0;
+
   while( 1 )
   {
     /* Signal from Pico1 into this Pico is active high. Wait for transition to low */
@@ -101,7 +104,9 @@ void main( void )
 
     /* Put 0x4000 on the address bus */
     gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
-    gpio_put_masked( GPIO_ABUS_BITMASK, 0x00004000);
+    gpio_put_masked( GPIO_ABUS_BITMASK, write_address+write_counter );
+    if( write_counter++ == 2048 )
+      write_counter = 0;
 
     /* Wait for the other Pico to end its memory request, then put the address bus lines back to inputs */
     while( gpio_get( GPIO_Z80_MREQ ) == 0 );
