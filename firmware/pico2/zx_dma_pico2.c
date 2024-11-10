@@ -55,28 +55,15 @@ void main( void )
   /* Blipper, for the scope */
   gpio_init( GPIO_P2_BLIPPER ); gpio_set_dir( GPIO_P2_BLIPPER, GPIO_OUT ); gpio_put( GPIO_P2_BLIPPER, 0 );
 
-  /* Watch for the incoming cue from the other Pico */
-  gpio_init( GPIO_P2_SIGNAL );  gpio_set_dir( GPIO_P2_SIGNAL, GPIO_IN );  gpio_pull_down( GPIO_P2_SIGNAL );
+  /* Watch for the incoming cue from Pico1 into this Pico */
+  gpio_init( GPIO_P1_REQUEST_SIGNAL );  gpio_set_dir( GPIO_P1_REQUEST_SIGNAL, GPIO_IN );  gpio_pull_down( GPIO_P1_REQUEST_SIGNAL );
 
   /* Outgoing signal tells Pico1 when this Pico has the address bus set */
-  gpio_init( GPIO_P2_LINKOUT ); gpio_set_dir( GPIO_P2_LINKOUT, GPIO_OUT ); gpio_put( GPIO_P2_LINKOUT, 0  );
+  gpio_init( GPIO_P2_DRIVING_SIGNAL );  gpio_set_dir( GPIO_P2_DRIVING_SIGNAL, GPIO_OUT ); gpio_put( GPIO_P2_DRIVING_SIGNAL, 0  );
 
-  gpio_init( GPIO_ABUS_A0  );   gpio_set_dir( GPIO_ABUS_A0,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A1  );   gpio_set_dir( GPIO_ABUS_A1,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A2  );   gpio_set_dir( GPIO_ABUS_A2,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A3  );   gpio_set_dir( GPIO_ABUS_A3,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A4  );   gpio_set_dir( GPIO_ABUS_A4,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A5  );   gpio_set_dir( GPIO_ABUS_A5,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A6  );   gpio_set_dir( GPIO_ABUS_A6,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A7  );   gpio_set_dir( GPIO_ABUS_A7,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A8  );   gpio_set_dir( GPIO_ABUS_A8,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A9  );   gpio_set_dir( GPIO_ABUS_A9,  GPIO_IN );
-  gpio_init( GPIO_ABUS_A10 );   gpio_set_dir( GPIO_ABUS_A10, GPIO_IN );
-  gpio_init( GPIO_ABUS_A11 );   gpio_set_dir( GPIO_ABUS_A11, GPIO_IN );
-  gpio_init( GPIO_ABUS_A12 );   gpio_set_dir( GPIO_ABUS_A12, GPIO_IN );
-  gpio_init( GPIO_ABUS_A13 );   gpio_set_dir( GPIO_ABUS_A13, GPIO_IN );
-  gpio_init( GPIO_ABUS_A14 );   gpio_set_dir( GPIO_ABUS_A14, GPIO_IN );
-  gpio_init( GPIO_ABUS_A15 );   gpio_set_dir( GPIO_ABUS_A15, GPIO_IN );
+  /* Set up the GPIOs which drive the Z80's address bus */
+  gpio_init_mask( GPIO_ABUS_BITMASK );
+  gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
 
   /* These are unused on this Pico and stay hi-Z */
   gpio_init( GPIO_Z80_MREQ );   gpio_set_dir( GPIO_Z80_MREQ, GPIO_IN );
@@ -89,57 +76,34 @@ void main( void )
 
   while( 1 )
   {
-    /* Signal from Pico1 is active high */
-    while( gpio_get( GPIO_P2_SIGNAL ) == 0 );
-    
-    gpio_put( GPIO_P2_LINKOUT, 1  );
+    /* Signal from Pico1 into this Pico is active high. What for transition to low */
+    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 );
 
+    /* Pico 1 has requested this Pico drives the address bus */
     gpio_put( GPIO_P2_BLIPPER, 1 );
+    gpio_put( GPIO_P2_DRIVING_SIGNAL,  1 );
+
+/*
+  remove the P2 signal reference, use the MREQ line going high as exit point instead
+  create new loop here, say, 16 bytes - start with 1
+  set directions at start of main loop, reset them at the end
+  inner loop sets the incrementing value onto the address bus
+  leaves it there until MREQ goes high - falling edge of clock at T3
+  asserts each of 16 values in turn
+  when the last one is complete, exit the inner loop, restore bus gpios
+  wait for P2 signal to go high again, then go back to top
+*/    
 
     /* Put 0x4000 on the address bus */
-    gpio_set_dir( GPIO_ABUS_A0,  GPIO_OUT ); gpio_put( GPIO_ABUS_A0, 0 );
-    gpio_set_dir( GPIO_ABUS_A1,  GPIO_OUT ); gpio_put( GPIO_ABUS_A1, 0 );
-    gpio_set_dir( GPIO_ABUS_A2,  GPIO_OUT ); gpio_put( GPIO_ABUS_A2, 0 );
-    gpio_set_dir( GPIO_ABUS_A3,  GPIO_OUT ); gpio_put( GPIO_ABUS_A3, 0 );
-    gpio_set_dir( GPIO_ABUS_A4,  GPIO_OUT ); gpio_put( GPIO_ABUS_A4, 0 );
-    gpio_set_dir( GPIO_ABUS_A5,  GPIO_OUT ); gpio_put( GPIO_ABUS_A5, 0 );
-    gpio_set_dir( GPIO_ABUS_A6,  GPIO_OUT ); gpio_put( GPIO_ABUS_A6, 0 );
-    gpio_set_dir( GPIO_ABUS_A7,  GPIO_OUT ); gpio_put( GPIO_ABUS_A7, 0 );
-    gpio_set_dir( GPIO_ABUS_A8,  GPIO_OUT ); gpio_put( GPIO_ABUS_A8, 0 );
-    gpio_set_dir( GPIO_ABUS_A9,  GPIO_OUT ); gpio_put( GPIO_ABUS_A9, 0 );
-    gpio_set_dir( GPIO_ABUS_A10, GPIO_OUT ); gpio_put( GPIO_ABUS_A10, 0 );
-    gpio_set_dir( GPIO_ABUS_A11, GPIO_OUT ); gpio_put( GPIO_ABUS_A11, 0 );
-    gpio_set_dir( GPIO_ABUS_A12, GPIO_OUT ); gpio_put( GPIO_ABUS_A12, 0 );
-    gpio_set_dir( GPIO_ABUS_A13, GPIO_OUT ); gpio_put( GPIO_ABUS_A13, 0 );
-    gpio_set_dir( GPIO_ABUS_A14, GPIO_OUT ); gpio_put( GPIO_ABUS_A14, 1 );
-    gpio_set_dir( GPIO_ABUS_A15, GPIO_OUT ); gpio_put( GPIO_ABUS_A15, 0 );
-
-    gpio_put( LED_PIN, 1 );
+    gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
+    gpio_put_masked( GPIO_ABUS_BITMASK, 0x00004000);
 
     /* Wait for the signal from the other Pico to stop, then put the address bus lines back to inputs */
-    while( gpio_get( GPIO_P2_SIGNAL ) == 1 );
+    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 1 );
 
-    gpio_put( LED_PIN, 0 );
+    gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
 
-    gpio_set_dir( GPIO_ABUS_A0,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A1,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A2,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A3,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A4,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A5,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A6,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A7,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A8,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A9,  GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A10, GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A11, GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A12, GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A13, GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A14, GPIO_IN );
-    gpio_set_dir( GPIO_ABUS_A15, GPIO_IN );
-
-    gpio_put( GPIO_P2_LINKOUT, 0  );
-
+    gpio_put( GPIO_P2_DRIVING_SIGNAL,  0  );
     gpio_put( GPIO_P2_BLIPPER, 0 );
   }
 

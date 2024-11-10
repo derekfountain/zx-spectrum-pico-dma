@@ -28,14 +28,16 @@
 #define GPIO_ABUS_A14     14
 #define GPIO_ABUS_A15     15
 
+#define GPIO_ABUS_BITMASK 0x0000FFFF
+
 #define GPIO_Z80_MREQ     16
 #define GPIO_Z80_RD       17
 #define GPIO_Z80_CLK      18
 
-/* Signal from Pico1 to Pico2, telling Pico2 to set the address bus */
-#define GPIO_P2_SIGNAL    20
+/* Signal from Pico1 to Pico2, requesting Pico2 to set the address bus */
+#define GPIO_P1_REQUEST_SIGNAL    20
 
-/* Signal from Pico2 to Pico1, telling Pico1 it's done with the address bus */
-#define GPIO_P2_LINKOUT   22
+/* Signal from Pico2 to Pico1, telling Pico1 that Pico2 is driving the address bus */
+#define GPIO_P2_DRIVING_SIGNAL    22
 
 #endif
