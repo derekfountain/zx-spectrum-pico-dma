@@ -42,4 +42,6 @@
 #define GPIO_DBUS_D6      6
 #define GPIO_DBUS_D7      7
 
+#define GPIO_DBUS_BITMASK 0x000000FF
+
 #endif

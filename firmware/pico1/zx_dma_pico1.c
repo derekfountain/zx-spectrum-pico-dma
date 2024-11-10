@@ -61,15 +61,11 @@ void main( void )
   /* Set up incoming signal from the other Pico telling us that it's controlling the address bus */
   gpio_init( GPIO_P2_SIGNAL ); gpio_set_dir( GPIO_P2_SIGNAL, GPIO_IN );
 
-  gpio_init( GPIO_DBUS_D0  );   gpio_set_dir( GPIO_DBUS_D0,  GPIO_IN );
-  gpio_init( GPIO_DBUS_D1  );   gpio_set_dir( GPIO_DBUS_D1,  GPIO_IN );
-  gpio_init( GPIO_DBUS_D2  );   gpio_set_dir( GPIO_DBUS_D2,  GPIO_IN );
-  gpio_init( GPIO_DBUS_D3  );   gpio_set_dir( GPIO_DBUS_D3,  GPIO_IN );
-  gpio_init( GPIO_DBUS_D4  );   gpio_set_dir( GPIO_DBUS_D4,  GPIO_IN );
-  gpio_init( GPIO_DBUS_D5  );   gpio_set_dir( GPIO_DBUS_D5,  GPIO_IN );
-  gpio_init( GPIO_DBUS_D6  );   gpio_set_dir( GPIO_DBUS_D6,  GPIO_IN );
-  gpio_init( GPIO_DBUS_D7  );   gpio_set_dir( GPIO_DBUS_D7,  GPIO_IN );
+  /* Initialise Z80 data bus GPIOs as inputs */
+  gpio_init_mask( GPIO_DBUS_BITMASK );
+  gpio_set_dir_in_masked( GPIO_DBUS_BITMASK );
 
+  /* Set up Z80 control bus */
   gpio_init( GPIO_Z80_BUSREQ ); gpio_set_dir( GPIO_Z80_BUSREQ, GPIO_OUT ); gpio_put( GPIO_Z80_BUSREQ, 1 );
   gpio_init( GPIO_Z80_BUSACK ); gpio_set_dir( GPIO_Z80_BUSACK, GPIO_IN  ); gpio_pull_up( GPIO_Z80_BUSACK );
 
@@ -130,14 +126,8 @@ void main( void )
     gpio_set_dir( GPIO_Z80_MREQ, GPIO_OUT ); gpio_put( GPIO_Z80_MREQ, 0 );
 
     /* Put 0x55 on the data bus */
-    gpio_set_dir( GPIO_DBUS_D0,  GPIO_OUT ); gpio_put( GPIO_DBUS_D0, 1 );
-    gpio_set_dir( GPIO_DBUS_D1,  GPIO_OUT ); gpio_put( GPIO_DBUS_D1, 0 );
-    gpio_set_dir( GPIO_DBUS_D2,  GPIO_OUT ); gpio_put( GPIO_DBUS_D2, 1 );
-    gpio_set_dir( GPIO_DBUS_D3,  GPIO_OUT ); gpio_put( GPIO_DBUS_D3, 0 );
-    gpio_set_dir( GPIO_DBUS_D4,  GPIO_OUT ); gpio_put( GPIO_DBUS_D4, 1 );
-    gpio_set_dir( GPIO_DBUS_D5,  GPIO_OUT ); gpio_put( GPIO_DBUS_D5, 0 );
-    gpio_set_dir( GPIO_DBUS_D6,  GPIO_OUT ); gpio_put( GPIO_DBUS_D6, 1 );
-    gpio_set_dir( GPIO_DBUS_D7,  GPIO_OUT ); gpio_put( GPIO_DBUS_D7, 0 );
+    gpio_set_dir_out_masked( GPIO_DBUS_BITMASK );
+    gpio_put_masked( GPIO_DBUS_BITMASK, 0x00000055);
 
     /*
      * Wait for Z80 clock to rise and fall - that's the start of T2, then
@@ -165,21 +155,15 @@ void main( void )
     /*
      * Write cycle is complete. Clean everything up.
      *
-     * Remove address bus (active high signal to other Pico), then wait for
-     * the other Pico to signal it's released the address bus
+     * Remove address bus (active high signal to other Pico). This isn't
+     * used at this point, the other Pico will have stopped driving the
+     * address bus when the MREQ signal was turned off (just above). So
+     * turning this signal off is just housekeeping at this point.
      */
     gpio_put( GPIO_P1_SIGNAL, 0 );
-    while( gpio_get( GPIO_P2_SIGNAL ) == 1 );
 
     /* Put the data and control buses back to hi-Z */
-    gpio_set_dir( GPIO_DBUS_D0,  GPIO_IN );
-    gpio_set_dir( GPIO_DBUS_D1,  GPIO_IN );
-    gpio_set_dir( GPIO_DBUS_D2,  GPIO_IN );
-    gpio_set_dir( GPIO_DBUS_D3,  GPIO_IN );
-    gpio_set_dir( GPIO_DBUS_D4,  GPIO_IN );
-    gpio_set_dir( GPIO_DBUS_D5,  GPIO_IN );
-    gpio_set_dir( GPIO_DBUS_D6,  GPIO_IN );
-    gpio_set_dir( GPIO_DBUS_D7,  GPIO_IN );
+    gpio_set_dir_in_masked( GPIO_DBUS_BITMASK );
 
     gpio_set_dir( GPIO_Z80_MREQ, GPIO_IN );
     gpio_set_dir( GPIO_Z80_WR,   GPIO_IN );

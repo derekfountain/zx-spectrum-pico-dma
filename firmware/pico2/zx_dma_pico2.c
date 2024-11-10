@@ -76,7 +76,13 @@ void main( void )
 
   while( 1 )
   {
-    /* Signal from Pico1 into this Pico is active high. What for transition to low */
+    /* Signal from Pico1 into this Pico is active high. Wait for transition to low */
+    /*
+     * Ideally I could just wait here for BUSACK to go low. While that's low this
+     * Pico needs to be driving the address bus. Right now the hardware doesn't
+     * have that connection - this Pico can't see BUSACK - so I can't use it. But
+     * it will be worth patching that if this works out.
+     */
     while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 );
 
     /* Pico 1 has requested this Pico drives the address bus */
@@ -84,7 +90,6 @@ void main( void )
     gpio_put( GPIO_P2_DRIVING_SIGNAL,  1 );
 
 /*
-  remove the P2 signal reference, use the MREQ line going high as exit point instead
   create new loop here, say, 16 bytes - start with 1
   set directions at start of main loop, reset them at the end
   inner loop sets the incrementing value onto the address bus
@@ -98,8 +103,8 @@ void main( void )
     gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
     gpio_put_masked( GPIO_ABUS_BITMASK, 0x00004000);
 
-    /* Wait for the signal from the other Pico to stop, then put the address bus lines back to inputs */
-    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 1 );
+    /* Wait for the other Pico to end its memory request, then put the address bus lines back to inputs */
+    while( gpio_get( GPIO_Z80_MREQ ) == 0 );
 
     gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
 
