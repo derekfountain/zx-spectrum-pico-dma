@@ -56,10 +56,10 @@ void main( void )
   gpio_init( GPIO_P2_BLIPPER ); gpio_set_dir( GPIO_P2_BLIPPER, GPIO_OUT ); gpio_put( GPIO_P2_BLIPPER, 0 );
 
   /* Watch for the incoming cue from Pico1 into this Pico */
-  gpio_init( GPIO_P1_REQUEST_SIGNAL );  gpio_set_dir( GPIO_P1_REQUEST_SIGNAL, GPIO_IN );  gpio_pull_down( GPIO_P1_REQUEST_SIGNAL );
+  gpio_init( GPIO_P1_REQUEST_SIGNAL );  gpio_set_dir( GPIO_P1_REQUEST_SIGNAL, GPIO_IN );  gpio_pull_up( GPIO_P1_REQUEST_SIGNAL );
 
   /* Outgoing signal tells Pico1 when this Pico has the address bus set */
-  gpio_init( GPIO_P2_DRIVING_SIGNAL );  gpio_set_dir( GPIO_P2_DRIVING_SIGNAL, GPIO_OUT ); gpio_put( GPIO_P2_DRIVING_SIGNAL, 0  );
+  gpio_init( GPIO_P2_DRIVING_SIGNAL );  gpio_set_dir( GPIO_P2_DRIVING_SIGNAL, GPIO_OUT ); gpio_put( GPIO_P2_DRIVING_SIGNAL, 1  );
 
   /* Set up the GPIOs which drive the Z80's address bus */
   gpio_init_mask( GPIO_ABUS_BITMASK );
@@ -79,18 +79,14 @@ void main( void )
 
   while( 1 )
   {
-    /* Signal from Pico1 into this Pico is active high. Wait for transition to low */
+    /* Signal from Pico1 into this Pico is active low. Wait for transition to low */
     /*
      * Ideally I could just wait here for BUSACK to go low. While that's low this
      * Pico needs to be driving the address bus. Right now the hardware doesn't
      * have that connection - this Pico can't see BUSACK - so I can't use it. But
      * it will be worth patching that if this works out.
      */
-    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 );
-
-    /* Pico 1 has requested this Pico drives the address bus */
-    gpio_put( GPIO_P2_BLIPPER, 1 );
-    gpio_put( GPIO_P2_DRIVING_SIGNAL,  1 );
+    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 1 );
 
 /*
   create new loop here, say, 16 bytes - start with 1
@@ -102,18 +98,31 @@ void main( void )
   wait for P2 signal to go high again, then go back to top
 */    
 
+    /* Pico 1 has requested this Pico drives the address bus */
+
     /* Put 0x4000 on the address bus */
     gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
     gpio_put_masked( GPIO_ABUS_BITMASK, write_address+write_counter );
     if( write_counter++ == 2048 )
       write_counter = 0;
 
+    /* Address bus has correct content, assert indicator showing we're driving address bus */
+    gpio_put( GPIO_P2_BLIPPER, 1 );
+    gpio_put( GPIO_P2_DRIVING_SIGNAL, 0 );
+
+//    this side needs to be in the tight loop, 2048 times
+//    i need to work out how it knows when it's time to increase the address bus value
+//   i'm not sure why its currently writing to spurious addresses
+
     /* Wait for the other Pico to end its memory request, then put the address bus lines back to inputs */
     while( gpio_get( GPIO_Z80_MREQ ) == 0 );
 
+    /* Wait for the other Pico to stop with the address setting signal so I know it's zero on the loop */
+    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 );
+
     gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
 
-    gpio_put( GPIO_P2_DRIVING_SIGNAL,  0  );
+    gpio_put( GPIO_P2_DRIVING_SIGNAL, 1 );
     gpio_put( GPIO_P2_BLIPPER, 0 );
   }
 

@@ -57,6 +57,18 @@ static void test_blipper( void )
  * 0.004096 of a second, or a smidge over 4ms. This routine needs to run in
  * that time, otherwise contention comes into play, not to mention the Z80
  * potentially writing to screen memory.
+ *
+ * The screen is 6144+768 bytes, = 6912 bytes.
+ *
+ ** As things stand, 6912 bytes takes about 6ms to fill in, which means
+ ** it's taking longer than top border time and bad things are happening.
+ ** Not quite sure what, TBH.
+ **
+ ** Solve problem 1: even if the destination address isn't incremented,
+ ** it writes to lots of different screen bytes. Need to find out why.
+ **
+ ** When that's solved, disconnect from th Z80 timings, the DMA should be
+ ** able to run as fast as the DRAM can go.
  */
 void int_callback( uint gpio, uint32_t events ) 
 {
@@ -78,61 +90,65 @@ void int_callback( uint gpio, uint32_t events )
   gpio_set_dir( GPIO_Z80_RD,   GPIO_OUT ); gpio_put( GPIO_Z80_RD,   1 );
   gpio_set_dir( GPIO_Z80_IORQ, GPIO_OUT ); gpio_put( GPIO_Z80_IORQ, 1 );
 
-  /*
-   * Moving on to the right hand side of fig7 in the Z80 manual.
-   * We're at the start of T1.
-   *
-   * Set address bus (active high signal to other Pico), then wait for other
-   * Pico to confirm it's done it
-   */
-  gpio_put( GPIO_P1_SIGNAL, 1 );
-  while( gpio_get( GPIO_P2_SIGNAL ) == 0 );
+  uint32_t byte_counter;
+  for( byte_counter=0; byte_counter < 2048; byte_counter++ )
+  {
+    /*
+     * Moving on to the right hand side of fig7 in the Z80 manual.
+     * We're at the start of T1.
+     *
+     * Set address bus (active low signal to other Pico), then wait for other
+     * Pico to confirm it's done it
+     */
+    gpio_put( GPIO_P1_REQUEST_SIGNAL, 0 );
+    while( gpio_get( GPIO_P2_DRIVING_SIGNAL ) == 1 );
 
-  /*
-   * We've just had the rising edge of Z80 clock T1. Wait for it to fall
-   * which puts us halfway through T1
-   */
-  while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+    /*
+     * We've just had the rising edge of Z80 clock T1. Wait for it to fall
+     * which puts us halfway through T1
+     */
+    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
 
-  /* Assert memory request */
-  gpio_set_dir( GPIO_Z80_MREQ, GPIO_OUT ); gpio_put( GPIO_Z80_MREQ, 0 );
+    /* Assert memory request */
+    gpio_set_dir( GPIO_Z80_MREQ, GPIO_OUT ); gpio_put( GPIO_Z80_MREQ, 0 );
 
-  /* Put 0x55 on the data bus */
-  gpio_set_dir_out_masked( GPIO_DBUS_BITMASK );
-  gpio_put_masked( GPIO_DBUS_BITMASK, 0x00000055);
+    /* Put 0x55 on the data bus */
+    gpio_set_dir_out_masked( GPIO_DBUS_BITMASK );
+    gpio_put_masked( GPIO_DBUS_BITMASK, 0x00000055);
 
-  /*
-   * Wait for Z80 clock to rise and fall - that's the start of T2, then
-   * at the clock low point halfway through T2
-   */
-  while( gpio_get( GPIO_Z80_CLK ) == 0 );    
-  while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+    /*
+     * Wait for Z80 clock to rise and fall - that's the start of T2, then
+     * at the clock low point halfway through T2
+     */
+    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
 
-  /* Assert the write line to write it */
-  gpio_set_dir( GPIO_Z80_WR, GPIO_OUT ); gpio_put( GPIO_Z80_WR, 0 );
+    /* Assert the write line to write it */
+    gpio_set_dir( GPIO_Z80_WR, GPIO_OUT ); gpio_put( GPIO_Z80_WR, 0 );
 
-  /* Wait for Z80 clock rising edge, that's the start of T3 */
-  while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+    /* Wait for Z80 clock rising edge, that's the start of T3 */
+    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
 
-  /* Wait for Z80 clock falling edge, that's halfway through T3 */
-  while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+    /* Wait for Z80 clock falling edge, that's halfway through T3 */
+    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
 
-  /* Remove write and memory request */
-  gpio_put( GPIO_Z80_WR,   1 );
-  gpio_put( GPIO_Z80_MREQ, 1 ); 
+    /* Remove write and memory request */
+    gpio_put( GPIO_Z80_WR,   1 );
+    gpio_put( GPIO_Z80_MREQ, 1 ); 
     
-  /* Wait for Z80 clock rising edge, that's the end of T3 */
-  while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+    /* Wait for Z80 clock rising edge, that's the end of T3 */
+    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
 
-  /*
-   * Write cycle is complete. Clean everything up.
-   *
-   * Remove address bus (active high signal to other Pico). This isn't
-   * used at this point, the other Pico will have stopped driving the
-   * address bus when the MREQ signal was turned off (just above). So
-   * turning this signal off is just housekeeping at this point.
-   */
-  gpio_put( GPIO_P1_SIGNAL, 0 );
+    /*
+     * Write cycle is complete. Clean everything up.
+     *
+     * Remove address bus (active high signal to other Pico). This isn't
+     * used at this point, the other Pico will have stopped driving the
+     * address bus when the MREQ signal was turned off (just above). So
+     * turning this signal off is just housekeeping at this point.
+     */
+    gpio_put( GPIO_P1_REQUEST_SIGNAL, 1 );
+  }
 
   /* Put the data and control buses back to hi-Z */
   gpio_set_dir_in_masked( GPIO_DBUS_BITMASK );
@@ -160,11 +176,11 @@ void main( void )
   /* Blipper, for the scope */
   gpio_init( GPIO_P1_BLIPPER ); gpio_set_dir( GPIO_P1_BLIPPER, GPIO_OUT ); gpio_put( GPIO_P1_BLIPPER, 0 );
 
-  /* Set up outgoing signal to the other Pico (active high, so set low now) */
-  gpio_init( GPIO_P1_SIGNAL );  gpio_set_dir( GPIO_P1_SIGNAL, GPIO_OUT ); gpio_put( GPIO_P1_SIGNAL, 0 );
+  /* Set up outgoing signal to the other Pico (active low, so set high now) */
+  gpio_init( GPIO_P1_REQUEST_SIGNAL );  gpio_set_dir( GPIO_P1_REQUEST_SIGNAL, GPIO_OUT ); gpio_put( GPIO_P1_REQUEST_SIGNAL, 1 );
 
   /* Set up incoming signal from the other Pico telling us that it's controlling the address bus */
-  gpio_init( GPIO_P2_SIGNAL ); gpio_set_dir( GPIO_P2_SIGNAL, GPIO_IN );
+  gpio_init( GPIO_P2_DRIVING_SIGNAL ); gpio_set_dir( GPIO_P2_DRIVING_SIGNAL, GPIO_IN );
 
   /* Initialise Z80 data bus GPIOs as inputs */
   gpio_init_mask( GPIO_DBUS_BITMASK );
@@ -182,11 +198,15 @@ void main( void )
   gpio_init( GPIO_Z80_CLK  );   gpio_set_dir( GPIO_Z80_CLK,  GPIO_IN );
 
   gpio_init( GPIO_Z80_INT  );   gpio_set_dir( GPIO_Z80_INT,  GPIO_IN );
-  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
   const uint LED_PIN = PICO_DEFAULT_LED_PIN;
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
+
+  /* Let the Spectrum do its RAM check before we start interfering */
+  sleep_ms(3000);
+
+  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
   while( 1 )
   {
