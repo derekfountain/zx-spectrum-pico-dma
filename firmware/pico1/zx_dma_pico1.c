@@ -72,8 +72,32 @@ static void test_blipper( void )
  */
 void int_callback( uint gpio, uint32_t events ) 
 {
+#if 0
+  gpio_put( GPIO_P1_BLIPPER, 1 );
+
   /* Assert bus request */
-  gpio_set_dir( GPIO_Z80_BUSREQ, GPIO_OUT ); gpio_put( GPIO_Z80_BUSREQ, 0 );
+  gpio_put( GPIO_Z80_BUSREQ, 0 );
+
+  while( gpio_get( GPIO_Z80_BUSACK ) == 1 );
+
+  gpio_put( GPIO_Z80_BUSREQ, 1 );
+
+  gpio_put( GPIO_P1_BLIPPER, 0 );
+
+  return;
+#endif
+
+
+
+
+
+
+
+
+
+
+  /* Assert bus request */
+  gpio_put( GPIO_Z80_BUSREQ, 0 );
 
   /*
    * Spin waiting for Z80 to acknowledge. BUSACK goes active (low) on the 
@@ -91,7 +115,7 @@ void int_callback( uint gpio, uint32_t events )
   gpio_set_dir( GPIO_Z80_IORQ, GPIO_OUT ); gpio_put( GPIO_Z80_IORQ, 1 );
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 2048; byte_counter++ )
+  for( byte_counter=0; byte_counter < 1; byte_counter++ )
   {
     /*
      * Moving on to the right hand side of fig7 in the Z80 manual.
@@ -148,6 +172,7 @@ void int_callback( uint gpio, uint32_t events )
      * turning this signal off is just housekeeping at this point.
      */
     gpio_put( GPIO_P1_REQUEST_SIGNAL, 1 );
+    while( gpio_get( GPIO_P2_DRIVING_SIGNAL ) == 0 );
   }
 
   /* Put the data and control buses back to hi-Z */
@@ -204,7 +229,7 @@ void main( void )
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
   /* Let the Spectrum do its RAM check before we start interfering */
-  sleep_ms(3000);
+  sleep_ms(4000);
 
   gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 

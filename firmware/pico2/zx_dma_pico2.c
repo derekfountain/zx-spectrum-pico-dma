@@ -74,9 +74,6 @@ void main( void )
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
-  uint32_t write_address = 0x4000;
-  uint32_t write_counter = 0;
-
   while( 1 )
   {
     /* Signal from Pico1 into this Pico is active low. Wait for transition to low */
@@ -86,44 +83,44 @@ void main( void )
      * have that connection - this Pico can't see BUSACK - so I can't use it. But
      * it will be worth patching that if this works out.
      */
-    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 1 );
 
-/*
-  create new loop here, say, 16 bytes - start with 1
-  set directions at start of main loop, reset them at the end
-  inner loop sets the incrementing value onto the address bus
-  leaves it there until MREQ goes high - falling edge of clock at T3
-  asserts each of 16 values in turn
-  when the last one is complete, exit the inner loop, restore bus gpios
-  wait for P2 signal to go high again, then go back to top
-*/    
+    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 1 ); 
+
+    const uint32_t write_address = 0x4000;
+    uint32_t write_counter = 0;
 
     /* Pico 1 has requested this Pico drives the address bus */
 
-    /* Put 0x4000 on the address bus */
-    gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
-    gpio_put_masked( GPIO_ABUS_BITMASK, write_address+write_counter );
-    if( write_counter++ == 2048 )
-      write_counter = 0;
+//    for( write_counter = 0; write_counter < 1; write_counter++ )
+//    {
+      /* Put 0x4000 on the address bus */
+      gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
+      gpio_put_masked( GPIO_ABUS_BITMASK, write_address+write_counter );
 
-    /* Address bus has correct content, assert indicator showing we're driving address bus */
-    gpio_put( GPIO_P2_BLIPPER, 1 );
-    gpio_put( GPIO_P2_DRIVING_SIGNAL, 0 );
+      /* Address bus has correct content, assert indicator showing we're driving address bus */
+      gpio_put( GPIO_P2_BLIPPER, 1 );
+      gpio_put( GPIO_P2_DRIVING_SIGNAL, 0 );
 
-//    this side needs to be in the tight loop, 2048 times
-//    i need to work out how it knows when it's time to increase the address bus value
-//   i'm not sure why its currently writing to spurious addresses
+      /* Wait for the other Pico to end its memory request, then put the address bus lines back to inputs */
+      while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 ); 
 
-    /* Wait for the other Pico to end its memory request, then put the address bus lines back to inputs */
-    while( gpio_get( GPIO_Z80_MREQ ) == 0 );
+      /*
+       * I was waiting for the other side to complete the memory request, but
+       * that doesn't work. The idea is that the MREQ goes low, and this side
+       * waits for it to go high again, indicating the memory access is
+       * complete. But actually, the MREQ signal is driven low (active) by the
+       * other side after a small amount of time (it waits for CLK), so this
+       * side tends to see the MREQ as high "again" before it's even gone low.
+       *
+       * while( gpio_get( GPIO_Z80_MREQ ) == 0 );
+       */
 
-    /* Wait for the other Pico to stop with the address setting signal so I know it's zero on the loop */
+      gpio_put( GPIO_P2_DRIVING_SIGNAL, 1 );
+      gpio_put( GPIO_P2_BLIPPER, 0 );
+      gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
+//    }
+
     while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 );
-
-    gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
-
-    gpio_put( GPIO_P2_DRIVING_SIGNAL, 1 );
-    gpio_put( GPIO_P2_BLIPPER, 0 );
   }
 
 }
