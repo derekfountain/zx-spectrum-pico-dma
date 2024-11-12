@@ -34,6 +34,10 @@
 #define GPIO_Z80_RD       17
 #define GPIO_Z80_CLK      18
 
+/* These were soldered on for this project */
+#define GPIO_Z80_BUSREQ  26
+#define GPIO_Z80_BUSACK  28
+
 /* Signal from Pico1 to Pico2, requesting Pico2 to set the address bus */
 #define GPIO_P1_REQUEST_SIGNAL    20
 

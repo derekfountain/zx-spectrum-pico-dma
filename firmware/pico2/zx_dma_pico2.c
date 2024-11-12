@@ -70,6 +70,10 @@ void main( void )
   gpio_init( GPIO_Z80_RD   );   gpio_set_dir( GPIO_Z80_RD,   GPIO_IN );
   gpio_init( GPIO_Z80_CLK  );   gpio_set_dir( GPIO_Z80_CLK,  GPIO_IN );
 
+  /* This side just listens to this req/ack exchange so it knows when to drive the address bus */
+  gpio_init( GPIO_Z80_BUSREQ ); gpio_set_dir( GPIO_Z80_BUSREQ, GPIO_IN );
+  gpio_init( GPIO_Z80_BUSACK ); gpio_set_dir( GPIO_Z80_BUSACK, GPIO_IN );
+
   const uint LED_PIN = PICO_DEFAULT_LED_PIN;
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
@@ -79,23 +83,26 @@ void main( void )
 
   while( 1 )
   {
-    /* Signal from Pico1 into this Pico is active low. Wait for transition to low */
     /*
-     * Ideally I could just wait here for BUSACK to go low. While that's low this
-     * Pico needs to be driving the address bus. Right now the hardware doesn't
-     * have that connection - this Pico can't see BUSACK - so I can't use it. But
-     * it will be worth patching that if this works out.
+     * When BUSACK goes low Pico1 has the Z80 bus. That's when we put the
+     * address on the address bus
      */
-
-    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 1 ); 
+    while( gpio_get( GPIO_Z80_BUSACK ) == 1 ) test_blipper(); 
 
     const uint32_t write_address = 0x4000;
     uint32_t write_counter = 0;
 
-    /* Pico 1 has requested this Pico drives the address bus */
-
-    for( write_counter = 0; write_counter < 2048; write_counter++ )
+    /* OK, Pico 1 has requested this Pico drives the address bus */
+    for( write_counter = 0; write_counter < 1; write_counter++ )
     {
+      /*
+       * If Pico1 has turned off the bus request we've been
+       * too slow - that's bad, stop driving the address bus immediately
+       * and hope for the best
+       */
+      if( gpio_get( GPIO_Z80_BUSREQ ) == 1 )
+	break;
+
       /* Put 0x4000 on the address bus */
       gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
       gpio_put_masked( GPIO_ABUS_BITMASK, write_address+write_counter );
@@ -124,7 +131,11 @@ void main( void )
       gpio_put( GPIO_P2_BLIPPER, 0 );
     }
 
-    while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 );
+    /*
+     * Pico1 will turn off the bus requested, then we wait for the
+     * Z80 to acknowledge the DMA has ended and it's taken the bus back
+     */
+    while( gpio_get( GPIO_Z80_BUSACK ) == 0 );
   }
 
 }

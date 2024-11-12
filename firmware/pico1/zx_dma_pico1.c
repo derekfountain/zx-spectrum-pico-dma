@@ -91,7 +91,7 @@ void int_callback( uint gpio, uint32_t events )
   gpio_set_dir( GPIO_Z80_IORQ, GPIO_OUT ); gpio_put( GPIO_Z80_IORQ, 1 );
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 2048; byte_counter++ )
+  for( byte_counter=0; byte_counter < 1; byte_counter++ )
   {
     /*
      * Moving on to the right hand side of fig7 in the Z80 manual.
@@ -208,10 +208,10 @@ void main( void )
   /* Let the Spectrum do its RAM check before we start interfering */
   sleep_ms(4000);
 
+  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
+
   /* Other side is waiting on this signal to go high. Init is complete, release other side */
   gpio_put( GPIO_P1_REQUEST_SIGNAL, 1 );
-
-  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
   while( 1 )
   {
