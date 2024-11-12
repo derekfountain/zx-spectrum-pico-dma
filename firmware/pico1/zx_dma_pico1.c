@@ -72,30 +72,6 @@ static void test_blipper( void )
  */
 void int_callback( uint gpio, uint32_t events ) 
 {
-#if 0
-  gpio_put( GPIO_P1_BLIPPER, 1 );
-
-  /* Assert bus request */
-  gpio_put( GPIO_Z80_BUSREQ, 0 );
-
-  while( gpio_get( GPIO_Z80_BUSACK ) == 1 );
-
-  gpio_put( GPIO_Z80_BUSREQ, 1 );
-
-  gpio_put( GPIO_P1_BLIPPER, 0 );
-
-  return;
-#endif
-
-
-
-
-
-
-
-
-
-
   /* Assert bus request */
   gpio_put( GPIO_Z80_BUSREQ, 0 );
 
@@ -115,7 +91,7 @@ void int_callback( uint gpio, uint32_t events )
   gpio_set_dir( GPIO_Z80_IORQ, GPIO_OUT ); gpio_put( GPIO_Z80_IORQ, 1 );
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 1; byte_counter++ )
+  for( byte_counter=0; byte_counter < 256; byte_counter++ )
   {
     /*
      * Moving on to the right hand side of fig7 in the Z80 manual.

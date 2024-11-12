@@ -91,8 +91,8 @@ void main( void )
 
     /* Pico 1 has requested this Pico drives the address bus */
 
-//    for( write_counter = 0; write_counter < 1; write_counter++ )
-//    {
+    for( write_counter = 0; write_counter < 256; write_counter++ )
+    {
       /* Put 0x4000 on the address bus */
       gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
       gpio_put_masked( GPIO_ABUS_BITMASK, write_address+write_counter );
@@ -115,10 +115,11 @@ void main( void )
        * while( gpio_get( GPIO_Z80_MREQ ) == 0 );
        */
 
+      gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
+
       gpio_put( GPIO_P2_DRIVING_SIGNAL, 1 );
       gpio_put( GPIO_P2_BLIPPER, 0 );
-      gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
-//    }
+    }
 
     while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 );
   }
