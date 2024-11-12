@@ -94,7 +94,7 @@ void main( void )
 
     /* Pico 1 has requested this Pico drives the address bus */
 
-    for( write_counter = 0; write_counter < 256; write_counter++ )
+    for( write_counter = 0; write_counter < 2048; write_counter++ )
     {
       /* Put 0x4000 on the address bus */
       gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
