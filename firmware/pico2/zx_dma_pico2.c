@@ -74,6 +74,9 @@ void main( void )
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
+  /* Other side holds this signal low while it initialises. Ignore everything until it's ready */
+  while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 ); 
+
   while( 1 )
   {
     /* Signal from Pico1 into this Pico is active low. Wait for transition to low */

@@ -177,8 +177,9 @@ void main( void )
   /* Blipper, for the scope */
   gpio_init( GPIO_P1_BLIPPER ); gpio_set_dir( GPIO_P1_BLIPPER, GPIO_OUT ); gpio_put( GPIO_P1_BLIPPER, 0 );
 
-  /* Set up outgoing signal to the other Pico (active low, so set high now) */
-  gpio_init( GPIO_P1_REQUEST_SIGNAL );  gpio_set_dir( GPIO_P1_REQUEST_SIGNAL, GPIO_OUT ); gpio_put( GPIO_P1_REQUEST_SIGNAL, 1 );
+  /* Set up outgoing signal to the other Pico (active low, hold it low for initialisation) */
+  gpio_init( GPIO_P1_REQUEST_SIGNAL );  gpio_set_dir( GPIO_P1_REQUEST_SIGNAL, GPIO_OUT );
+  gpio_put( GPIO_P1_REQUEST_SIGNAL, 0 );
 
   /* Set up incoming signal from the other Pico telling us that it's controlling the address bus */
   gpio_init( GPIO_P2_DRIVING_SIGNAL ); gpio_set_dir( GPIO_P2_DRIVING_SIGNAL, GPIO_IN );
@@ -206,6 +207,9 @@ void main( void )
 
   /* Let the Spectrum do its RAM check before we start interfering */
   sleep_ms(4000);
+
+  /* Other side is waiting on this signal to go high. Init is complete, release other side */
+  gpio_put( GPIO_P1_REQUEST_SIGNAL, 1 );
 
   gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
