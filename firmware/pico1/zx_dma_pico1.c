@@ -64,34 +64,37 @@ static void test_blipper( void )
  ** it's taking longer than top border time and bad things are happening.
  ** Not quite sure what, TBH.
  **
- ** Solve problem 1: even if the destination address isn't incremented,
- ** it writes to lots of different screen bytes. Need to find out why.
- **
  ** When that's solved, disconnect from th Z80 timings, the DMA should be
  ** able to run as fast as the DRAM can go.
  */
 void int_callback( uint gpio, uint32_t events ) 
 {
+  /* /INT to this BUSREQ going low is about 2uS */
+
   /* Assert bus request */
   gpio_put( GPIO_Z80_BUSREQ, 0 );
 
   /*
    * Spin waiting for Z80 to acknowledge. BUSACK goes active (low) on the 
    * rising edge of the clock - see fig8 in the Z80 manual
+   *
+   * The delay between BUSREQ being asserted and BUSACK acknowledging is
+   * between 800ns and 2uS. Part of that would be the Z80 and whatever it's
+   * up to, and part would be how this loop fits with the moment the ACK
+   * line goes low.
    */
   while( gpio_get( GPIO_Z80_BUSACK ) == 1 );
-
-  /* Blipper goes high while DMA process is active */
-  gpio_put( GPIO_P1_BLIPPER, 1 );
-
-  /* Approx 1.2uS passes while the RP2040 waits for the Z80 to BUSACK */
 
   /* RD and IORQ lines are unused and stay inactive */
   gpio_set_dir( GPIO_Z80_RD,   GPIO_OUT ); gpio_put( GPIO_Z80_RD,   1 );
   gpio_set_dir( GPIO_Z80_IORQ, GPIO_OUT ); gpio_put( GPIO_Z80_IORQ, 1 );
 
+  /* Blipper goes high while DMA process is active */
+  /* Approx 500ns passes between BUSACK and here */
+  gpio_put( GPIO_P1_BLIPPER, 1 );
+
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 1; byte_counter++ )
+  for( byte_counter=0; byte_counter < 2; byte_counter++ )
   {
     /*
      * Moving on to the right hand side of fig7 in the Z80 manual.
@@ -208,10 +211,11 @@ void main( void )
   /* Let the Spectrum do its RAM check before we start interfering */
   sleep_ms(4000);
 
-  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
-
   /* Other side is waiting on this signal to go high. Init is complete, release other side */
   gpio_put( GPIO_P1_REQUEST_SIGNAL, 1 );
+  sleep_ms(1);
+
+  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
   while( 1 )
   {

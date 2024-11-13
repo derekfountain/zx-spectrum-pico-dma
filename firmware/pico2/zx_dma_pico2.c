@@ -85,7 +85,9 @@ void main( void )
   {
     /*
      * When BUSACK goes low Pico1 has the Z80 bus. That's when we put the
-     * address on the address bus
+     * address on the address bus.
+     *
+     * This scanning busy-loop takes about 200ns per iteration.
      */
     while( gpio_get( GPIO_Z80_BUSACK ) == 1 ) test_blipper(); 
 
@@ -93,7 +95,7 @@ void main( void )
     uint32_t write_counter = 0;
 
     /* OK, Pico 1 has requested this Pico drives the address bus */
-    for( write_counter = 0; write_counter < 1; write_counter++ )
+    for( write_counter = 0; write_counter < 2; write_counter++ )
     {
       /*
        * If Pico1 has turned off the bus request we've been
@@ -103,30 +105,23 @@ void main( void )
       if( gpio_get( GPIO_Z80_BUSREQ ) == 1 )
 	break;
 
+      /* Wait for Pico1 to request the address bus is set */
+      while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 1 ); 
+
       /* Put 0x4000 on the address bus */
       gpio_set_dir_out_masked( GPIO_ABUS_BITMASK );
       gpio_put_masked( GPIO_ABUS_BITMASK, write_address+write_counter );
 
       /* Address bus has correct content, assert indicator showing we're driving address bus */
+      /* This blipper goes high 200ns to 300ns after Pico1 requests the address be placed */
       gpio_put( GPIO_P2_BLIPPER, 1 );
       gpio_put( GPIO_P2_DRIVING_SIGNAL, 0 );
 
       /* Wait for the other Pico to end its memory request, then put the address bus lines back to inputs */
       while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 ); 
-
-      /*
-       * I was waiting for the other side to complete the memory request, but
-       * that doesn't work. The idea is that the MREQ goes low, and this side
-       * waits for it to go high again, indicating the memory access is
-       * complete. But actually, the MREQ signal is driven low (active) by the
-       * other side after a small amount of time (it waits for CLK), so this
-       * side tends to see the MREQ as high "again" before it's even gone low.
-       *
-       * while( gpio_get( GPIO_Z80_MREQ ) == 0 );
-       */
-
       gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
 
+      /* The blipper stays up for about 1.2uS per byte */
       gpio_put( GPIO_P2_DRIVING_SIGNAL, 1 );
       gpio_put( GPIO_P2_BLIPPER, 0 );
     }
