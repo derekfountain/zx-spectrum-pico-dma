@@ -94,7 +94,7 @@ void int_callback( uint gpio, uint32_t events )
   gpio_put( GPIO_P1_BLIPPER, 1 );
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 2; byte_counter++ )
+  for( byte_counter=0; byte_counter < 2048; byte_counter++ )
   {
     /*
      * Moving on to the right hand side of fig7 in the Z80 manual.
