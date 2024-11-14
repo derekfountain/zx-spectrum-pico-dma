@@ -121,7 +121,7 @@ void main( void )
       while( gpio_get( GPIO_P1_REQUEST_SIGNAL ) == 0 ); 
       gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
 
-      /* The blipper stays up for about 1.2uS per byte */
+      /* The address bus is loaded for about 390ns per byte */
       gpio_put( GPIO_P2_DRIVING_SIGNAL, 1 );
       gpio_put( GPIO_P2_BLIPPER, 0 );
     }

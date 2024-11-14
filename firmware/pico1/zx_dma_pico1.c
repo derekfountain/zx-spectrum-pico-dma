@@ -106,11 +106,31 @@ void int_callback( uint gpio, uint32_t events )
     gpio_put( GPIO_P1_REQUEST_SIGNAL, 0 );
     while( gpio_get( GPIO_P2_DRIVING_SIGNAL ) == 1 );
 
+/*
+ * With full Z80 synchronisation a 2048 byte DMA transfer takes 2.9ms.
+ * Removing the initial clock sync makes no difference. 
+ * Removing the pre-write sync makes the 2048 byte DMA transfer takes 2.3ms.
+ * Removing the final sync makes the 2048 byte DMA transfer takes 2.18ms.
+ *
+ * That leaves the T3 fall and rise of the CLK signal, which I removed.
+ *  Replacing it with busy_wait_us( 1 ); produced a delay much too long.
+ *  About 2uS for the write, made a mess.
+ *
+ *  I replaced it with 25 NOPs. At 125MHz that should be 200ns. It comes
+ *  out at 300ns blipper fall to rise, but it worked. 2048 in 1.89ms
+ *
+ *  20 NOPs results in 2048 bytes in 1.79ms
+ *  15 NOPs results in 2048 bytes in 1.73ms
+ *  10 NOPs stops working
+ *  19 NOPs is 152ns, so that's a fast as the DRAM can go
+ */
+
     /*
      * We've just had the rising edge of Z80 clock T1. Wait for it to fall
      * which puts us halfway through T1
      */
-    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+    /* Initial clock sync. Removing this is safe. /*
+//    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
 
     /* Assert memory request */
     gpio_set_dir( GPIO_Z80_MREQ, GPIO_OUT ); gpio_put( GPIO_Z80_MREQ, 0 );
@@ -123,24 +143,58 @@ void int_callback( uint gpio, uint32_t events )
      * Wait for Z80 clock to rise and fall - that's the start of T2, then
      * at the clock low point halfway through T2
      */
-    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
-    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+    /* Pre-write sync */
+//    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+//    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
 
     /* Assert the write line to write it */
     gpio_set_dir( GPIO_Z80_WR, GPIO_OUT ); gpio_put( GPIO_Z80_WR, 0 );
 
+    /*
+     * Spectrum RAM is rated 150ns which is 1.5e-07. Pico clock speed is
+     * 125,000,000Hz, so one clock cycle is 8e-09. So that's 18.75
+     * RP2040 clock cycles in one DRAM transaction time. NOP is T1, so it
+     * takes one clock cycle, so 19 NOPs should guarantee a pause long
+     * enough for the 4116s to respond.
+     */
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+  __asm volatile ("nop");
+
+//    busy_wait_us( 1 );
+
     /* Wait for Z80 clock rising edge, that's the start of T3 */
-    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+//    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
 
     /* Wait for Z80 clock falling edge, that's halfway through T3 */
-    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
+//    while( gpio_get( GPIO_Z80_CLK ) == 1 );    
 
     /* Remove write and memory request */
     gpio_put( GPIO_Z80_WR,   1 );
     gpio_put( GPIO_Z80_MREQ, 1 ); 
     
     /* Wait for Z80 clock rising edge, that's the end of T3 */
-    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
+    /* Final sync */
+//    while( gpio_get( GPIO_Z80_CLK ) == 0 );    
 
     /*
      * Write cycle is complete. Clean everything up.
