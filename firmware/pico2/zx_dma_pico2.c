@@ -95,7 +95,7 @@ void main( void )
     uint32_t write_counter = 0;
 
     /* OK, Pico 1 has requested this Pico drives the address bus */
-    for( write_counter = 0; write_counter < 2048; write_counter++ )
+    for( write_counter = 0; write_counter < 1; write_counter++ )
     {
       /*
        * If Pico1 has turned off the bus request we've been

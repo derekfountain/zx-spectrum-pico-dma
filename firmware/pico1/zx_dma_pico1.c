@@ -49,28 +49,32 @@ static void test_blipper( void )
 }
 
 /*
- * Callback here means INT signal from Z80 - indicates top border time is starting.
- *
  * https://worldofspectrum.org/faq/reference/48kreference.htm
  *
+ * The top border is 64 lines, each line being 224Ts.
+ *
  * Spectrum top border time is 64 line times, which is 14336 T states. That's
- * 0.004096 of a second, or a smidge over 4ms. This routine needs to run in
- * that time, otherwise contention comes into play, not to mention the Z80
+ * 0.004096 of a second, or a smidge over 4ms. DMA in top border time needs to
+ * run in that time, otherwise contention comes into play, not to mention the Z80
  * potentially writing to screen memory.
  *
- * The screen is 6144+768 bytes, = 6912 bytes.
+ * The screen is 192 lines, each line being 224Ts.
  *
- ** As things stand, 6912 bytes takes about 6ms to fill in, which means
- ** it's taking longer than top border time and bad things are happening.
- ** Not quite sure what, TBH.
- **
- ** When that's solved, disconnect from th Z80 timings, the DMA should be
- ** able to run as fast as the DRAM can go.
+ * Lower border is also usable if I can synchronise the Pico to running
+ * when the lower border starts. Lower border is 56 lines, which is another
+ * 2.229ms, so 6.325ms in total: that's start of lower border to the start of
+ * the top line of the display.
+ *
+ * So, to hit the start of lower border from /INT, I need 64 lines of top border,
+ * plus 192 lines of screen, That's 228 lines from /INT to the start of the lower
+ * border. At 224Ts per line, 228 lines is 64,512 Ts from /INT to the point I
+ * want to start BUSREQ. That's 18.432ms from /INT.
+ *
+ * The screen is 6144+768 bytes, = 6912 bytes.
  */
-void int_callback( uint gpio, uint32_t events ) 
+const uint32_t INT_TO_LOWER_BORDER_TIME_US = 19;
+int64_t alarm_callback( alarm_id_t id, void *user_data )
 {
-  /* /INT to this BUSREQ going low is about 2uS */
-
   /* Assert bus request */
   gpio_put( GPIO_Z80_BUSREQ, 0 );
 
@@ -94,7 +98,7 @@ void int_callback( uint gpio, uint32_t events )
   gpio_put( GPIO_P1_BLIPPER, 1 );
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 2048; byte_counter++ )
+  for( byte_counter=0; byte_counter < 1; byte_counter++ )
   {
     /*
      * Moving on to the right hand side of fig7 in the Z80 manual.
@@ -112,8 +116,12 @@ void int_callback( uint gpio, uint32_t events )
      * precise pause tuned to the 150ns DRAM in the Spectrum results in a
      * 2048 byte DMA transfer in 1.850ms.
      * Top border time is 4.096ms, so the target for a 2048 transfer (a
-     * third of the screen) is 4.096/3 which is 1.37ms. So some improvement
-     * still needed.
+     * third of the screen) is 4.096/3 which is 1.37ms.
+     * Using the lower border, 6.325ms/3 is 2.108ms, which I'm now inside.
+     *
+     * So, use the lower border and my current performance is 5.55ms for
+     * the whole screen, which is inside the 6.325 total border time.
+     * In theory.
      */
 
     /* Assert memory request */
@@ -163,10 +171,7 @@ void int_callback( uint gpio, uint32_t events )
     /*
      * Write cycle is complete. Clean everything up.
      *
-     * Remove address bus (active high signal to other Pico). This isn't
-     * used at this point, the other Pico will have stopped driving the
-     * address bus when the MREQ signal was turned off (just above). So
-     * turning this signal off is just housekeeping at this point.
+     * Remove address bus (active high signal to other Pico).
      */
     gpio_put( GPIO_P1_REQUEST_SIGNAL, 1 );
     while( gpio_get( GPIO_P2_DRIVING_SIGNAL ) == 0 );
@@ -189,6 +194,51 @@ void int_callback( uint gpio, uint32_t events )
 
   /* Indicate DMA process complete */
   gpio_put( GPIO_P1_BLIPPER, 0 );
+
+  /* Don't reschedule this alarm function */
+  return 0;
+}
+
+/*
+ * This handler is called when the ULA pings the /INT line.
+ * That's the top of the top border, but that doesn't give me
+ * enough time to DMA the screen, so I need to start the DMA
+ * the the top of the lower border. i.e. just after the last
+ * line of the screen has been drawn.
+ * The only marker point I have is /INT, so I need to time
+ * 18.432ms from this point. I can't do it that precisely
+ * using SDK on core, so I have to do my best until I can get
+ * PIOs involved.
+ */
+void int_callback( uint gpio, uint32_t events ) 
+{
+  /*
+   * The delay between the /INT line going low and this routine
+   * running is a very consistent, and almost exact, 2uS. That
+   * precision comes from the RP2040 internals, presumably.
+   * 
+   *  gpio_put( GPIO_P1_BLIPPER, 1 );
+   */
+  const uint32_t INT_TO_HANDLER_TIME_US = 2;
+
+  /*
+   * The delay between this alarm being scheduled to go off and the
+   * handler actually running varies by about 2uS. That's measured
+   * with the blipper pinging at the top of the handler. I can't use
+   * the lower number because that will set the BUSREQ running while
+   * the lowest part of the screen is still being drawn, which is
+   * going to cause contention issues. It has to be consistently
+   * /at least/ 18.432ms before BUSREQ is fired so I have to err on
+   * the side of caution here.
+   *
+   * This is where using PIO to get the timing right will be of
+   * benefit.
+   */
+  const uint32_t ALARM_TO_HANDLER_TIME_US = 3;
+
+  add_alarm_in_us( INT_TO_LOWER_BORDER_TIME_US-
+		   INT_TO_HANDLER_TIME_US-
+		   ALARM_TO_HANDLER_TIME_US, alarm_callback, (void*)0, false );
 }
 
 void main( void )
