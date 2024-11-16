@@ -72,9 +72,17 @@ static void test_blipper( void )
  *
  * The screen is 6144+768 bytes, = 6912 bytes.
  */
-const uint32_t INT_TO_LOWER_BORDER_TIME_US = 19;
 int64_t alarm_callback( alarm_id_t id, void *user_data )
 {
+/* The overlapping interrupts (i.e. INT arriving while the DMA is is running)
+ * isn't working. Not sure if the SDK alarm thing is smart enough. Skipping
+ * every other INT makes it stable
+ */
+  static uint32_t  toggle = 0;
+  toggle = ~toggle;
+  if ( ~toggle )
+    return 0;
+
   /* Assert bus request */
   gpio_put( GPIO_Z80_BUSREQ, 0 );
 
@@ -98,7 +106,7 @@ int64_t alarm_callback( alarm_id_t id, void *user_data )
   gpio_put( GPIO_P1_BLIPPER, 1 );
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 1; byte_counter++ )
+  for( byte_counter=0; byte_counter < 6912; byte_counter++ )
   {
     /*
      * Moving on to the right hand side of fig7 in the Z80 manual.
@@ -235,6 +243,8 @@ void int_callback( uint gpio, uint32_t events )
    * benefit.
    */
   const uint32_t ALARM_TO_HANDLER_TIME_US = 3;
+
+  const uint32_t INT_TO_LOWER_BORDER_TIME_US = 18432;
 
   add_alarm_in_us( INT_TO_LOWER_BORDER_TIME_US-
 		   INT_TO_HANDLER_TIME_US-
