@@ -33,6 +33,7 @@
 
 #include "pico/platform.h"
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "pico/binary_info.h"
 #include <string.h>
 
@@ -72,16 +73,21 @@ static void test_blipper( void )
  *
  * The screen is 6144+768 bytes, = 6912 bytes.
  */
-int64_t alarm_callback( alarm_id_t id, void *user_data )
+void run_dma( void )
 {
 /* The overlapping interrupts (i.e. INT arriving while the DMA is is running)
  * isn't working. Not sure if the SDK alarm thing is smart enough. Skipping
  * every other INT makes it stable
  */
+/*
   static uint32_t  toggle = 0;
   toggle = ~toggle;
   if ( ~toggle )
     return 0;
+*/
+while(1)
+{
+  (void)multicore_fifo_pop_blocking();
 
   /* Assert bus request */
   gpio_put( GPIO_Z80_BUSREQ, 0 );
@@ -202,6 +208,12 @@ int64_t alarm_callback( alarm_id_t id, void *user_data )
 
   /* Indicate DMA process complete */
   gpio_put( GPIO_P1_BLIPPER, 0 );
+}
+}
+
+int64_t alarm_callback( alarm_id_t id, void *user_data )
+{
+  multicore_fifo_push_blocking( 0 );
 
   /* Don't reschedule this alarm function */
   return 0;
@@ -246,9 +258,10 @@ void int_callback( uint gpio, uint32_t events )
 
   const uint32_t INT_TO_LOWER_BORDER_TIME_US = 18432;
 
-  add_alarm_in_us( INT_TO_LOWER_BORDER_TIME_US-
-		   INT_TO_HANDLER_TIME_US-
-		   ALARM_TO_HANDLER_TIME_US, alarm_callback, (void*)0, false );
+  if( add_alarm_in_us( INT_TO_LOWER_BORDER_TIME_US-
+		       INT_TO_HANDLER_TIME_US-
+		       ALARM_TO_HANDLER_TIME_US, alarm_callback, (void*)0, false ) < 0 )
+    panic("Unable to set alarm");
 }
 
 void main( void )
@@ -286,6 +299,8 @@ void main( void )
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
+  multicore_launch_core1(run_dma);
+
   /* Let the Spectrum do its RAM check before we start interfering */
   sleep_ms(4000);
 
@@ -297,7 +312,7 @@ void main( void )
 
   while( 1 )
   {
-    sleep_ms(5);
+    sleep_ms(1000);
   }
 
 }

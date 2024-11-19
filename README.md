@@ -210,4 +210,108 @@ RAM. But that means somehow accessing the CLK such that when it stops pulsing th
 stops the DMA. It might be possible to do that? Perhaps a PIO watching the CLK signal
 and indicating to the core when the CLK stops? I didn't try it but it might work.
 
+## Challenge 3 - A Screenful
+
+Next step is to try transferring a full screen of data into the Spectrum. This is the
+underlying requirement. If an RP2040 is to be used to do full screen scrolling or other such
+things it needs to be able to transfer the results back into the Spectrum at 50fps. If it
+can't there's only so much point in doing it. You might as well do the job on the Spectrum.
+
+So this next experiment does what the previous ones do: transfer a block of data into the
+Spectrum at the point of the ULA's INTerrupt, when the ULA is drawing the top border. The
+data block for a full screen is 6,912 byte - 6,144 for the graphics, plus 768 for the 
+attributes.
+
+Here's how the result looks:
+
+![alt text](images/zx_dma_55_full_screen_on_int.jpg "Full screen DMA trace")
+
+The screen fills as expected, but there's shimmering and glitching, and the Spectrum hangs.
+
+The oscilloscope trace looks like this:
+
+![alt text](images/full_screen_on_int.png "Full screen trace")
+
+This is at 1ms per division, the entire DMA trace takes just over 6ms. Top border time is
+4ms, this is causing contention, hence the flickering.
+
+I think the Spectrum is hanging because the Z80 is getting incorrect data from the lower
+RAM, which is where it stores system information. The contention doesn't just affect the
+screen memory, it affects all the lower 16K. I'm not entirely sure what's going on with this
+hangup to be honest, but it doesn't really matter. A full screen DMA isn't possible in top
+border time.
+
+### Try Bottom Border Time
+
+The Spectrum's border is in two pieces, top and bottom, separated by the screen image of course.
+If I can start the DMA at the point the ULA starts to draw the bottom border (i.e. just as it's
+finished drawing line 192 of the screen itself) then I get bottom border time, followed by top
+border time, before the ULA wants to access the RAM again (in order for it to start drawing the
+top line of the screen).
+
+Lower border is 56 lines at 224Ts per line, which is 12,544 Ts. On the 3.5MHz Z80 12,544 T-states
+takes 0.003584 seconds, or 3.584ms. So if I can time it perfectly, I get 3.584ms of bottom
+border time, followed by 4.096ms of top border time, to complete the DMA without causing
+contention. That's 7.68ms, which should be enough to complete the full screen DMA which takes
+just over 6ms.
+
+The problem is that there's no timing signal or indication that the ULA has completed drawing the
+data area and is about to start drawing the bottom border. The only option is to do it on a timer.
+To hit the start of lower border time from the moment INT fires, I need 64 lines of top border,
+plus 192 lines of screen, That's 228 lines from INT to the start of the lower border. At 224Ts per
+line, 228 lines is 64,512 Ts. That's 18.432ms.
+
+The approach here is to start a timer for 18,432uS in the INT handler, then go back to sleep. The
+DMA actually happens when the second timer expires:
+
+![alt text](images/1_byte_on_lower_border.png "1 byte on lower border trace")
+
+Here, yellow shows is the INT signal, which is the point when the 18,432uS timer is started. Light
+blue shows the BUSREQ signal, which is the start of the DMA process. The 'scope's cursor shows the
+time difference between the two:
+
+![alt text](images/1_byte_on_lower_border_cursors.png "1 byte on lower border trace")
+
+The gap is 18.4ms, which looks right. I'm hoping the 0.032ms offset is a measuring error.
+
+The above images are based on a single byte DMA, which worked. But something very odd started
+happening in the RP2040 when I made the transfer larger. It seems the Pico SDK wouldn't set up the
+next alarm call function until the current one finished executing. So the first INT would arrive
+and its handler would set the 18.4ms timer running. When that expired the DMA would start. But with
+a large DMA, the transfer would still be running when the next INT arrived. With the alarm timer
+still running and DMAing bytes to the Spectrum, either the INT handler didn't run, or it wouldn't
+set up the alarm handler correctly. After a lot of messing about I found that doing the DMA
+transfer from the second core of the RP2040 made the problem go away and the screen filled as
+expected:
+
+![alt text](images/zx_dma_55_full_screen_on_lower_border.jpg "Full screen DMA trace")
+
+Here's the oscilloscope trace:
+
+![alt text](images/full_screen_on_lower_border.png "full screen on lower border trace")
+
+The first INT is where the orange trigger cursor is on the yellow line. That causes a handler
+to run which sets up an alarm to call the DMA function 18.4ms seconds later. The DMA function
+for that INT is the next one on the light blue line - i.e. not the one directly below the INT,
+but the one nearly 4 divisions later, to the right. As you can see, the next INT arrives during
+the DMA process, which sets up the next alarm while the current one finishes, and so on.
+
+#### Fail
+
+With the dual core hack in place, this worked! Hurrah! Only it didn't, because although the DMA
+worked correctly, and at just about spot on 6.0ms was plenty quick enough to be inside the 7.68ms
+dual borders time, the Spectrum hanged every time. It took me an age to work out why, but it's
+obvious when you know: the INT signal is being generated correctly by the ULA, and the Pico is
+responding to it correctly, but because the bus request is active when the next INT comes in
+the Z80 (which is effectively sitting suspended) doesn't see it. So the Spectrum's not getting to
+run its interrupt routine which does all sort of useful stuff like reading the keyboard.
+
+It might still be possible to make this work. Some of the DMA transfer could be done in lower
+border time, and as long as that was finished and the BUSREQ removed by the time the next INT
+arrived, it might then be possible to do the rest of the DMA transfer in top border time. i.e. do it
+in two portions. But for BASIC to work properly the top border transfer needs to be well clear of
+the Spectrum ROM's interrupt handler routine. It's messy and fiddly and not really the solution
+I'm after.
+
+
 TBC
