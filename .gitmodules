@@ -1,0 +1,3 @@
+[submodule "pcb/rp2xxx_stamp_footprints"]
+	path = pcb/rp2xxx_stamp_footprints
+	url = git@github.com:solderparty/rp2xxx_stamp_footprints.git
