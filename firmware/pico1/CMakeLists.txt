@@ -16,7 +16,6 @@ target_include_directories(pico1 PRIVATE ../firmware-common)
 
 target_link_libraries(pico1
 		      pico_stdlib
-		      pico_multicore
 	              hardware_gpio
 )
 
