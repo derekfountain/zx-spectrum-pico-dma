@@ -11,7 +11,33 @@ Raspberry Pi Pico to do it. Hence this project.
 
 Spoiler: yes, it can.
 
-## The Hardware
+# Two implementations
+
+My first attempt at getting this DMA idea to work used my ZX Diagnostics Board
+as a test platform. It worked, but synchronising the dual Picos was too slow and
+fussy. I eventually gave up on that and designed a new Spectrum interface based
+on the RP2350B microcontroller.
+
+The dual Pico approach is documented towards the end of this page. It's probably
+not of much interest to most people. The RP2350B implementation is the more
+interesting one.
+
+## RP2350B Implementation
+
+TBC
+
+
+
+## ZX Diagnostics Board Implementation
+
+My first attempt at getting this working used by ZX Diagnostics Board project
+as a testbed. What follows is the write up of what I did and how far I got.
+Might be useful to someone, for something.
+
+The Pico software which was working at the end of this experimentation is
+tagged as v0.2.
+
+### The Hardware
 
 The hardware I used for this experimentation is my [ZX Diagnostics Board](https://github.com/derekfountain/zx-spectrum-diagnostics).
 This board was designed to be flexible. It exposes on headers all the signals
@@ -41,7 +67,7 @@ These Z80 signals were also wired to Pico 2 GPIO 26 and 28 respectively.
 The other signals required here are IORQ, MREQ, RD and WR. These were already
 connected up to Pico 1.
 
-## The Contention Problem
+### The Contention Problem
 
 One of the primary reasons this approach has rarely, if ever, been seen on a
 Spectrum interface is the contention problem. The Spectrum's display is
@@ -58,7 +84,7 @@ memory. That is, if an external device takes control of the buses in order
 to read of write to the screen memory, that device needs to stay clear of
 the ULA's screen memory accesses otherwise contention becomes a problem.
 
-## Timings
+### Timings
 
 To do a DMA transfer into screen memory (0x4000 to 0x5AFF inclusive) it needs
 to be timed precisely with the Spectrum's ULA hardware. The Spectrum hardware
@@ -70,7 +96,7 @@ top left corner.
 So yes, that's simple, but it's also limited, because that's the only timing
 signal the Spectrum emits. I have to work with that.
 
-## Challenge 1 - Get it working
+### Challenge 1 - Get it working
 
 The initial challenge, then, is to get DMA working on the Spectrum. The aim here
 is to write a single byte of data into the top left corner of the screen, with
@@ -79,7 +105,7 @@ everything else remaining stable and glitch free.
 I'm going to put a dotted line - value 0x55 - in location 0x4000, so 4 little
 dots appear in the corner.
 
-## Approach
+### Approach
 
 The approach used for this experimentation is as follows:
 
@@ -112,7 +138,7 @@ of 19 RP2040 "NOP" instructions between the /WR signal going active and inactive
 is the minium requirement for successful writes. On a 125MHz RP2040 19 of the
 single-cycle "NOP" instructions complete in 152ns, which seems to add up.
 
-## Result
+### Result
 
 There's no point is trying to do this on an emulator, so screenshots are photos
 from a real Spectrum screen.
@@ -131,7 +157,7 @@ the Z80 is highest priority, higher than NMI, even. If I do something on the
 Spectrum which disables interrupts, the dots appear there anyway. The BEEP
 command still plays a note, but it's a bit "buzzy."
 
-## Signals Analysis
+### Signals Analysis
 
 Here's the trace from the oscilloscope:
 
@@ -161,7 +187,7 @@ control again is about 150ns.
 
 The Z80 "loses" the period of the purple line being low, which is about 1.6uS.
 
-## Challenge 2 - More data
+### Challenge 2 - More data
 
 Proving a single byte can be written into Spectrum memory is gratifying, but not really
 very useful. Next step is to try writing more data. Let's try 2KB. This requires
@@ -210,7 +236,7 @@ RAM. But that means somehow accessing the CLK such that when it stops pulsing th
 stops the DMA. It might be possible to do that? Perhaps a PIO watching the CLK signal
 and indicating to the core when the CLK stops? I didn't try it but it might work.
 
-## Challenge 3 - A Screenful
+### Challenge 3 - A Screenful
 
 Next step is to try transferring a full screen of data into the Spectrum. This is the
 underlying requirement. If an RP2040 is to be used to do full screen scrolling or other such
@@ -241,7 +267,7 @@ screen memory, it affects all the lower 16K. I'm not entirely sure what's going 
 hangup to be honest, but it doesn't really matter. A full screen DMA isn't possible in top
 border time.
 
-### Try Bottom Border Time
+#### Try Bottom Border Time
 
 The Spectrum's border is in two pieces, top and bottom, separated by the screen image of course.
 If I can start the DMA at the point the ULA starts to draw the bottom border (i.e. just as it's
@@ -296,7 +322,7 @@ for that INT is the next one on the light blue line - i.e. not the one directly 
 but the one nearly 4 divisions later, to the right. As you can see, the next INT arrives during
 the DMA process, which sets up the next alarm while the current one finishes, and so on.
 
-#### Fail
+##### Fail
 
 With the dual core hack in place, this worked! Hurrah! Only it didn't, because although the DMA
 worked correctly, and at just about spot on 6.0ms was plenty quick enough to be inside the 7.68ms
@@ -312,6 +338,3 @@ arrived, it might then be possible to do the rest of the DMA transfer in top bor
 in two portions. But for BASIC to work properly the top border transfer needs to be well clear of
 the Spectrum ROM's interrupt handler routine. It's messy and fiddly and not really the solution
 I'm after.
-
-
-TBC
