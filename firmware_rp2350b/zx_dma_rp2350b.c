@@ -64,6 +64,7 @@ static void test_blipper( void )
  *
  * The screen is 192 lines, each line being 224Ts.
  */
+#if 0
 void int_callback( uint gpio, uint32_t events ) 
 {
   /* Assert bus request */
@@ -95,7 +96,7 @@ void int_callback( uint gpio, uint32_t events )
   const uint32_t write_address = 0x4000;
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 6912; byte_counter++ )
+  for( byte_counter=0; byte_counter < 1/*6912*/; byte_counter++ )
   {
     /*
      * With full Z80 synchronisation a 2048 byte DMA transfer takes 2.9ms.
@@ -187,32 +188,51 @@ void int_callback( uint gpio, uint32_t events )
 
   return;
 }
-
+#endif
 
 void main( void )
 {
   bi_decl(bi_program_description("ZX Spectrum DMA RP2350 Stamp XL Board Binary."));
 
   /* Hold the Z80 in reset until everything is set up */
+  /*
+   * This line is connected directly to the Z80, which is
+   * wrong.
+   * No transistor present, so this doesn't do anything.
+   * Setting the pin to input seems to hold the reset line
+   * and the ZX doesn't start. Not sure if it's the E9
+   * behaviour? I cut the track and now it's behaving
+   * correctly.
+   */
   gpio_init( GPIO_Z80_RESET ); gpio_set_dir( GPIO_Z80_RESET, GPIO_OUT ); gpio_put( GPIO_Z80_RESET, 1 );
+ 
+  /*
+   * This is the output pin to the base of Q101. This is the one which
+   * should drive the reset line, but the board is wrong.
+   * With no transistor in place, this doesn't do anything
+   */
+  gpio_init( GPIO_RESET_Z80   );   gpio_set_dir( GPIO_RESET_Z80,   GPIO_IN );
 
   /* Blippers, for the scope */
   gpio_init( GPIO_BLIPPER1 ); gpio_set_dir( GPIO_BLIPPER1, GPIO_OUT ); gpio_put( GPIO_BLIPPER1, 0 );
   gpio_init( GPIO_BLIPPER2 ); gpio_set_dir( GPIO_BLIPPER2, GPIO_OUT ); gpio_put( GPIO_BLIPPER2, 0 );
-
+ 
   /* Not taking over the ZX ROM for the time being */
-  gpio_init( GPIO_ROMCS );    gpio_set_dir( GPIO_ROMCS, GPIO_OUT );    gpio_put( GPIO_ROMCS, 1 );
+  gpio_init( GPIO_ROMCS );    gpio_set_dir( GPIO_ROMCS, GPIO_IN );
 
   /* Set up Z80 control bus */
+  
   gpio_init( GPIO_Z80_CLK  );   gpio_set_dir( GPIO_Z80_CLK,  GPIO_IN );
   gpio_init( GPIO_Z80_RD   );   gpio_set_dir( GPIO_Z80_RD,   GPIO_IN );
   gpio_init( GPIO_Z80_WR   );   gpio_set_dir( GPIO_Z80_WR,   GPIO_IN );
   gpio_init( GPIO_Z80_MREQ );   gpio_set_dir( GPIO_Z80_MREQ, GPIO_IN );
   gpio_init( GPIO_Z80_IORQ );   gpio_set_dir( GPIO_Z80_IORQ, GPIO_IN );
   gpio_init( GPIO_Z80_INT  );   gpio_set_dir( GPIO_Z80_INT,  GPIO_IN );
+  gpio_init( GPIO_Z80_WAIT );   gpio_set_dir( GPIO_Z80_WAIT, GPIO_IN );
+ 
 
   gpio_init( GPIO_Z80_BUSREQ ); gpio_set_dir( GPIO_Z80_BUSREQ, GPIO_OUT ); gpio_put( GPIO_Z80_BUSREQ, 1 );
-  gpio_init( GPIO_Z80_BUSACK ); gpio_set_dir( GPIO_Z80_BUSACK, GPIO_IN  ); gpio_pull_up( GPIO_Z80_BUSACK );
+  gpio_init( GPIO_Z80_BUSACK ); gpio_set_dir( GPIO_Z80_BUSACK, GPIO_IN  );
 
   /* Initialise Z80 data bus GPIOs as inputs */
   gpio_init_mask( GPIO_DBUS_BITMASK );  gpio_set_dir_in_masked( GPIO_DBUS_BITMASK );
@@ -223,7 +243,7 @@ void main( void )
   /* Let the Spectrum do its RAM check before we start interfering */
   sleep_ms(4000);
 
-  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
+  //gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
   while( 1 )
   {

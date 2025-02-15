@@ -14,8 +14,14 @@
 /* Take over the Spectrum's ROM */
 #define GPIO_ROMCS        28
 
-/* Output, holds Z80 in reset */
+/* ERROR HERE, this pin is connected directly to the Z80 /RESET */
 #define GPIO_Z80_RESET    36
+
+/*
+ * ERROR HERE, this pin is the output connected to the base of Q101.
+ * With no transistor in place this doesn't do anything
+ */
+#define GPIO_RESET_Z80    43
 
 /* Z80 Control bus */
 #define GPIO_Z80_CLK      24
