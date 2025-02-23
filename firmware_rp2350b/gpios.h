@@ -14,14 +14,19 @@
 /* Take over the Spectrum's ROM */
 #define GPIO_ROMCS        28
 
-/* ERROR HERE, this pin is connected directly to the Z80 /RESET */
-#define GPIO_Z80_RESET    36
-
 /*
- * ERROR HERE, this pin is the output connected to the base of Q101.
- * With no transistor in place this doesn't do anything
+ * This pin is the output connected to the base of Q101.
+ * Driving it positive pulls ZXRESET low
  */
 #define GPIO_RESET_Z80    43
+
+/*
+ * This pin is an input to the RP2350. It's the Z80's
+ * /RESET signal and is here so the RP2350 can tell when
+ * the Spectrum is being reset. This isn't an output for
+ * resetting the Spectrum, GPIO_RESET_Z80 does that.
+*/
+#define GPIO_Z80_RESET    36
 
 /* Z80 Control bus */
 #define GPIO_Z80_CLK      24
@@ -44,6 +49,8 @@
 #define GPIO_DBUS_D6      6
 #define GPIO_DBUS_D7      7
 
+#define GPIO_DBUS_BITMASK 0x000000FF
+
 /* Z80 Address bus */
 #define GPIO_DBUS_A0      8
 #define GPIO_DBUS_A1      9
@@ -62,7 +69,6 @@
 #define GPIO_DBUS_A14     22
 #define GPIO_DBUS_A15     23
 
-#define GPIO_DBUS_BITMASK 0x000000FF
 #define GPIO_ABUS_BITMASK 0x00FFFF00
 
 #endif
