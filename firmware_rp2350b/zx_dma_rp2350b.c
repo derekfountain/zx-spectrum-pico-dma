@@ -66,10 +66,9 @@ static void test_blipper( void )
  */
 void int_callback( uint gpio, uint32_t events ) 
 {
-  /* Blipper goes high while DMA process is active */
-  gpio_put( GPIO_BLIPPER1, 1 );
-
 // Crude hack to let the ROM interrupt routine run, makes testing easier
+// because the Spectrum's keyboard scanning routine is in the interrupt
+// routine which runs at the same time as this DMA code
 busy_wait_ms(1);
 
   /* Assert bus request */
@@ -95,10 +94,13 @@ busy_wait_ms(1);
   gpio_set_dir( GPIO_Z80_MREQ, GPIO_OUT ); gpio_put( GPIO_Z80_MREQ, 1 );
   gpio_set_dir( GPIO_Z80_WR,   GPIO_OUT ); gpio_put( GPIO_Z80_WR,   1 );
 
+  /* Blipper goes high while DMA process is active */
+  gpio_put( GPIO_BLIPPER1, 1 );
+
   const uint32_t write_address = 0x4000;
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 64/*6912*/; byte_counter++ )
+  for( byte_counter=0; byte_counter < 6912; byte_counter++ )
   {
     /*
      * With full Z80 synchronisation a 2048 byte DMA transfer takes 2.9ms.
@@ -134,7 +136,17 @@ busy_wait_ms(1);
      * takes one clock cycle, so 23 NOPs should guarantee a pause long
      * enough for the 4116s to respond.
      */
-busy_wait_us(1);  // Add 1000us
+#define USING_STATIC_RAM_MODULE 1
+#if USING_STATIC_RAM_MODULE
+
+  /*
+   * This was developed on a Spectrum containing a static RAM-based lower memory
+   * module. I thought it would be faster than the 4116s, so should work with
+   * fewer than 23 NOPs. Turns out it doesn't. Empirical testing shows it needs 29,
+   * which is 1.93e-07 seconds, or about 1.93 microseconds. It don't know why.
+   *
+   * A transfer of 6,912 bytes at this speed takes 2.18ms.
+   */
     __asm volatile ("nop");
     __asm volatile ("nop");
     __asm volatile ("nop");
@@ -162,6 +174,15 @@ busy_wait_us(1);  // Add 1000us
     __asm volatile ("nop");
     __asm volatile ("nop");
     __asm volatile ("nop");
+    __asm volatile ("nop");
+    __asm volatile ("nop");
+
+    __asm volatile ("nop");
+    __asm volatile ("nop");
+    __asm volatile ("nop");
+    __asm volatile ("nop");
+#endif
+
     gpio_put( GPIO_BLIPPER2, 0 );
 
     /* Remove write and memory request */
