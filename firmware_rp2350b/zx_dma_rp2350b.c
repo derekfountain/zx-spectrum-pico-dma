@@ -64,9 +64,14 @@ static void test_blipper( void )
  *
  * The screen is 192 lines, each line being 224Ts.
  */
-#if 0
 void int_callback( uint gpio, uint32_t events ) 
 {
+  /* Blipper goes high while DMA process is active */
+  gpio_put( GPIO_BLIPPER1, 1 );
+
+// Crude hack to let the ROM interrupt routine run, makes testing easier
+busy_wait_ms(1);
+
   /* Assert bus request */
   gpio_put( GPIO_Z80_BUSREQ, 0 );
 
@@ -90,13 +95,10 @@ void int_callback( uint gpio, uint32_t events )
   gpio_set_dir( GPIO_Z80_MREQ, GPIO_OUT ); gpio_put( GPIO_Z80_MREQ, 1 );
   gpio_set_dir( GPIO_Z80_WR,   GPIO_OUT ); gpio_put( GPIO_Z80_WR,   1 );
 
-  /* Blipper goes high while DMA process is active */
-  gpio_put( GPIO_BLIPPER1, 1 );
-
   const uint32_t write_address = 0x4000;
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 1/*6912*/; byte_counter++ )
+  for( byte_counter=0; byte_counter < 64/*6912*/; byte_counter++ )
   {
     /*
      * With full Z80 synchronisation a 2048 byte DMA transfer takes 2.9ms.
@@ -113,17 +115,18 @@ void int_callback( uint gpio, uint32_t events )
      */
 
     /* Set address of ZX byte to write to */
-    gpio_put_masked( GPIO_ABUS_BITMASK, write_address+byte_counter );
-
-    /* Put 0x55 on the data bus */
-    gpio_put_masked( GPIO_DBUS_BITMASK, 0x00000001);
+    gpio_put_masked( GPIO_ABUS_BITMASK, (write_address+byte_counter)<<8 );
 
     /* Assert memory request */
     gpio_put( GPIO_Z80_MREQ, 0 );
 
+    /* Put 0x55 on the data bus */
+    gpio_put_masked( GPIO_DBUS_BITMASK, 0x00000055);
+
     /* Assert the write line to write it */
     gpio_put( GPIO_Z80_WR, 0 );
 
+    gpio_put( GPIO_BLIPPER2, 1 );
     /*
      * Spectrum RAM is rated 150ns which is 1.5e-07. RP2350 clock speed is
      * 150,000,000Hz, so one clock cycle is 6.66666666667e-09. So that's 22.5
@@ -131,6 +134,7 @@ void int_callback( uint gpio, uint32_t events )
      * takes one clock cycle, so 23 NOPs should guarantee a pause long
      * enough for the 4116s to respond.
      */
+busy_wait_us(1);  // Add 1000us
     __asm volatile ("nop");
     __asm volatile ("nop");
     __asm volatile ("nop");
@@ -158,11 +162,11 @@ void int_callback( uint gpio, uint32_t events )
     __asm volatile ("nop");
     __asm volatile ("nop");
     __asm volatile ("nop");
+    gpio_put( GPIO_BLIPPER2, 0 );
 
     /* Remove write and memory request */
     gpio_put( GPIO_Z80_WR,   1 );
     gpio_put( GPIO_Z80_MREQ, 1 ); 
-
   }
 
   /* Address bus back to inputs */
@@ -188,7 +192,6 @@ void int_callback( uint gpio, uint32_t events )
 
   return;
 }
-#endif
 
 void main( void )
 {
@@ -243,7 +246,7 @@ void main( void )
   /* Let the Spectrum do its RAM check before we start interfering */
   sleep_ms(4000);
 
-  //gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
+  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
   while( 1 )
   {
