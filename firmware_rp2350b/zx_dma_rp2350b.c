@@ -32,8 +32,15 @@
 #include "pico.h"
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
+#include "hardware/gpio.h"
+#include "hardware/timer.h"
+#include "hardware/clocks.h"
+#include "pico/multicore.h"
+
 
 #include "gpios.h"
+
+//#define OVERCLOCK 270000
 
 static void test_blipper( void )
 {
@@ -50,18 +57,24 @@ static void test_blipper( void )
  */
 
 /*
+ * Local copy of the ZX display file. Pixel data is 256x192 pixels,
+ * at 8 pixels per byte. Colour attributes are 32x24 bytes
+ */
+static uint8_t zx_screen_mirror[((256*192)/8) + (32*24)];
+static uint16_t a_log[100000];
+static uint32_t a_log_ctr = 0;
+
+/*
  * This handler is called when the ULA pings the /INT line.
- *
- * The top border is 64 lines, each line being 224Ts.
  *
  * Spectrum top border time is 64 line times, which is 14336 T states. That's
  * 0.004096 of a second, or a smidge over 4ms. DMA in top border time needs to
  * run in that time, otherwise contention comes into play, not to mention the Z80
  * potentially writing to screen memory.
  *
- * The screen is 192 lines, each line being 224Ts.
+ * The top border is 64 lines, each line being 224Ts.
  */
-void int_callback( uint gpio, uint32_t events ) 
+void int_handler( uint gpio, uint32_t events ) 
 {
   /*
    * Crude hack to let the ROM interrupt routine run, makes testing easier
@@ -119,13 +132,13 @@ void int_callback( uint gpio, uint32_t events )
      */
 
     /* Set address of ZX byte to write to */
-    gpio_put_masked( GPIO_ABUS_BITMASK, (write_address+byte_counter)<<8 );
+    gpio_put_masked( GPIO_ABUS_BITMASK, (write_address+byte_counter)<<GPIO_ABUS_A0 );
 
     /* Assert memory request */
     gpio_put( GPIO_Z80_MREQ, 0 );
 
-    /* Put 0x55 on the data bus */
-    gpio_put_masked( GPIO_DBUS_BITMASK, 0x00000055);
+    /* Put value on the data bus */
+    gpio_put_masked( GPIO_DBUS_BITMASK, zx_screen_mirror[byte_counter]);
 
     /* Assert the write line to write it */
     gpio_put( GPIO_Z80_WR, 0 );
@@ -225,9 +238,24 @@ void int_callback( uint gpio, uint32_t events )
   return;
 }
 
+int64_t start_dma_running( alarm_id_t id, void *user_data )
+{
+  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_handler );
+
+  return 0;
+}
+
 void main( void )
 {
   bi_decl(bi_program_description("ZX Spectrum DMA RP2350 Stamp XL Board Binary."));
+
+#ifdef OVERCLOCK
+  set_sys_clock_khz( OVERCLOCK, 1 );
+#endif
+
+  /* All interrupts off except the timers */
+//  irq_set_mask_enabled( 0xFFFFFFFF, 0 );
+//  irq_set_mask_enabled( 0x0000000F, 1 );
 
   /*
    * This is the Z80's /RESET signal, it's an input to this code.
@@ -272,14 +300,47 @@ void main( void )
 
   /* Let the Spectrum run and do its RAM check before we start interferring */
   gpio_put( GPIO_RESET_Z80, 0 );
-  sleep_ms(3000);
- 
-  /* The Spectrum's only timer signal in /INT, everything somes from there */
-  gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_callback );
 
+  add_alarm_in_ms( 3000, start_dma_running, NULL, 0 );
+
+  /*
+   * The IRQ handler stuff is nowhere near fast enough to handle this. The Z80's
+   * write is finished long before the RP2350 even gets to call the handler function
+   */
   while( 1 )
   {
-    sleep_ms(5);
+    register uint64_t gpios = gpio_get_all64();
+
+    const uint64_t WR_MREQ_MASK = (0x01 << GPIO_Z80_MREQ) | (0x01 << GPIO_Z80_WR);
+
+    if( (gpios & WR_MREQ_MASK) == 0 )
+    {
+       gpio_put( GPIO_BLIPPER2, 1 );
+      __asm volatile ("nop");
+      __asm volatile ("nop");
+      gpio_put( GPIO_BLIPPER2, 0 );
+
+      /* It's a write to memory, find the address being written to */
+      uint64_t address = (gpios & (0xFFFF << GPIO_ABUS_A0)) >> GPIO_ABUS_A0;
+
+      const uint64_t display_first_byte = 0x4000;
+      const uint64_t display_last_byte  = 0x5AFF;
+
+      if( (address >= display_first_byte) && (address <= display_last_byte) )
+      {
+        uint8_t data = (gpios & (0xFF << GPIO_DBUS_D0)) >> GPIO_DBUS_D0;
+        zx_screen_mirror[address-display_first_byte] = (data & 0xff);
+
+       gpio_put( GPIO_BLIPPER2, 1 );
+      __asm volatile ("nop");
+      __asm volatile ("nop");
+      gpio_put( GPIO_BLIPPER2, 0 );
+      }
+
+      /* Wait for the Z80 write to finish */
+      while( (gpio_get_all64() & WR_MREQ_MASK) == 0 );
+    }
+
   }
 
 }

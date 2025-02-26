@@ -52,22 +52,22 @@
 #define GPIO_DBUS_BITMASK 0x000000FF
 
 /* Z80 Address bus */
-#define GPIO_DBUS_A0      8
-#define GPIO_DBUS_A1      9
-#define GPIO_DBUS_A2      10
-#define GPIO_DBUS_A3      11
-#define GPIO_DBUS_A4      12
-#define GPIO_DBUS_A5      13
-#define GPIO_DBUS_A6      14
-#define GPIO_DBUS_A7      15
-#define GPIO_DBUS_A8      16
-#define GPIO_DBUS_A9      17
-#define GPIO_DBUS_A10     18
-#define GPIO_DBUS_A11     19
-#define GPIO_DBUS_A12     20
-#define GPIO_DBUS_A13     21
-#define GPIO_DBUS_A14     22
-#define GPIO_DBUS_A15     23
+#define GPIO_ABUS_A0      8
+#define GPIO_ABUS_A1      9
+#define GPIO_ABUS_A2      10
+#define GPIO_ABUS_A3      11
+#define GPIO_ABUS_A4      12
+#define GPIO_ABUS_A5      13
+#define GPIO_ABUS_A6      14
+#define GPIO_ABUS_A7      15
+#define GPIO_ABUS_A8      16
+#define GPIO_ABUS_A9      17
+#define GPIO_ABUS_A10     18
+#define GPIO_ABUS_A11     19
+#define GPIO_ABUS_A12     20
+#define GPIO_ABUS_A13     21
+#define GPIO_ABUS_A14     22
+#define GPIO_ABUS_A15     23
 
 #define GPIO_ABUS_BITMASK 0x00FFFF00
 
