@@ -6,7 +6,7 @@
 	(paper "A4")
 	(title_block
 		(title "RP2350B Spectrum DMA Interface")
-		(date "2024-11-29")
+		(date "2025-02-26")
 	)
 	(lib_symbols
 		(symbol "Connector_Generic:Conn_01x02"
@@ -5029,16 +5029,6 @@
 	)
 	(wire
 		(pts
-			(xy 242.57 60.96) (xy 255.27 60.96)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "124e6324-63c3-4162-87b5-86d1cc4a1808")
-	)
-	(wire
-		(pts
 			(xy 95.25 20.32) (xy 93.98 20.32)
 		)
 		(stroke
@@ -5681,6 +5671,16 @@
 		)
 		(uuid f4752fed-266f-4992-984c-f1fa79d1ceaa)
 	)
+	(text "Input to the RP2350"
+		(exclude_from_sim no)
+		(at 261.366 42.418 0)
+		(effects
+			(font
+				(size 1 1)
+			)
+		)
+		(uuid "37e4d1d9-bc5f-4e0d-94e0-8d2fbed1a2ff")
+	)
 	(text "Input buttons"
 		(exclude_from_sim no)
 		(at 97.282 51.054 0)
@@ -5690,6 +5690,17 @@
 			)
 		)
 		(uuid "54a8a762-8fd7-499a-8c0d-6c1ce3f5152d")
+	)
+	(text "For some unknown reason the RP2350 GPIO\nthe ZXRESET line inputs into needs to be\npulled high. This is different to the RP2040"
+		(exclude_from_sim no)
+		(at 217.678 132.588 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "60dc8329-63ab-4de7-9ae2-0e66987a58fe")
 	)
 	(text "Spare GPIOs"
 		(exclude_from_sim no)
@@ -5701,7 +5712,7 @@
 		)
 		(uuid "6d201b6a-a85d-4da0-9dc1-de5bb9c9607a")
 	)
-	(text "Interface to pull Z80 reset low.\nNote TTH device differs from SMD device."
+	(text "Interface to pull Z80 reset low."
 		(exclude_from_sim no)
 		(at 218.44 159.512 0)
 		(effects
@@ -5732,6 +5743,17 @@
 		)
 		(uuid "922cd846-0067-4ddf-abb0-505ed705b3d0")
 	)
+	(text "Output to drive the Z80 reset"
+		(exclude_from_sim no)
+		(at 255.27 60.198 0)
+		(effects
+			(font
+				(size 1 1)
+			)
+			(justify left)
+		)
+		(uuid "b924dff7-48d0-43a7-825a-af2b5100de96")
+	)
 	(text "SWD programming"
 		(exclude_from_sim no)
 		(at 129.032 33.782 0)
@@ -5754,7 +5776,6 @@
 	)
 	(label "GPIO39"
 		(at 120.65 184.15 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5765,7 +5786,6 @@
 	)
 	(label "GPIO42"
 		(at 255.27 58.42 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5776,7 +5796,6 @@
 	)
 	(label "I2C1_SDA"
 		(at 255.27 38.1 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5787,7 +5806,6 @@
 	)
 	(label "GPIO38"
 		(at 255.27 48.26 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5798,7 +5816,6 @@
 	)
 	(label "BOOTSEL"
 		(at 106.68 26.67 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5809,7 +5826,6 @@
 	)
 	(label "~{RESET}"
 		(at 166.37 43.18 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5820,7 +5836,6 @@
 	)
 	(label "BLIPPER2"
 		(at 255.27 71.12 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5831,7 +5846,6 @@
 	)
 	(label "GPIO40"
 		(at 120.65 181.61 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5842,7 +5856,6 @@
 	)
 	(label "GPIO40"
 		(at 255.27 53.34 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5853,7 +5866,6 @@
 	)
 	(label "GPIO41"
 		(at 120.65 179.07 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5864,7 +5876,6 @@
 	)
 	(label "I2C1_SDA"
 		(at 125.73 157.48 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5875,7 +5886,6 @@
 	)
 	(label "SWCLK"
 		(at 134.62 19.05 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5886,7 +5896,6 @@
 	)
 	(label "BLIPPER1"
 		(at 255.27 68.58 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5897,7 +5906,6 @@
 	)
 	(label "BLIPPER1"
 		(at 133.35 48.26 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5908,7 +5916,6 @@
 	)
 	(label "BOOTSEL"
 		(at 166.37 38.1 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5917,31 +5924,8 @@
 		)
 		(uuid "949ca875-d3cb-4ca8-a72a-9a12f7cc8b59")
 	)
-	(label "RESET_Z80"
-		(at 232.41 149.86 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "9a7793a3-b515-42cb-980f-97d8c8169f1f")
-	)
-	(label "RESET_Z80"
-		(at 255.27 60.96 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "9a8f4e46-2cc6-46d6-b8e5-6132a3e4a437")
-	)
 	(label "GPIO41"
 		(at 255.27 55.88 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5952,7 +5936,6 @@
 	)
 	(label "SWDIO"
 		(at 166.37 55.88 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5963,7 +5946,6 @@
 	)
 	(label "GPIO39"
 		(at 255.27 50.8 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5974,7 +5956,6 @@
 	)
 	(label "I2C1_SCL"
 		(at 255.27 40.64 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5985,7 +5966,6 @@
 	)
 	(label "BLIPPER2"
 		(at 133.35 50.8 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5996,7 +5976,6 @@
 	)
 	(label "GPIO42"
 		(at 120.65 176.53 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6007,7 +5986,6 @@
 	)
 	(label "BTN_USR1"
 		(at 106.68 33.02 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6018,7 +5996,6 @@
 	)
 	(label "SWDIO"
 		(at 134.62 24.13 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6029,7 +6006,6 @@
 	)
 	(label "SWCLK"
 		(at 166.37 58.42 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6040,7 +6016,6 @@
 	)
 	(label "BTN_USR2"
 		(at 255.27 66.04 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6051,7 +6026,6 @@
 	)
 	(label "GPIO37"
 		(at 255.27 45.72 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6062,7 +6036,6 @@
 	)
 	(label "~{RESET}"
 		(at 106.68 20.32 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6073,7 +6046,6 @@
 	)
 	(label "BTN_USR2"
 		(at 106.68 39.37 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6084,7 +6056,6 @@
 	)
 	(label "GPIO38"
 		(at 120.65 186.69 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6095,7 +6066,6 @@
 	)
 	(label "BTN_USR1"
 		(at 255.27 63.5 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6106,7 +6076,6 @@
 	)
 	(label "GPIO37"
 		(at 120.65 189.23 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6117,7 +6086,6 @@
 	)
 	(label "I2C1_SCL"
 		(at 125.73 154.94 0)
-		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6232,6 +6200,28 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "RESET_Z80"
+		(shape output)
+		(at 242.57 60.96 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "04cc4cb8-d029-4041-b84f-0a69789a05a1")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 255.8964 60.96 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
 				(hide yes)
 			)
 		)
@@ -6501,7 +6491,7 @@
 		)
 	)
 	(global_label "ZXRESET"
-		(shape output)
+		(shape input)
 		(at 242.57 43.18 0)
 		(fields_autoplaced yes)
 		(effects
@@ -7420,6 +7410,28 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "RESET_Z80"
+		(shape input)
+		(at 232.41 149.86 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "8413e3c4-f611-46ec-9ab6-0b17afd1f6fa")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 219.0836 149.86 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 				(hide yes)
 			)
 		)
