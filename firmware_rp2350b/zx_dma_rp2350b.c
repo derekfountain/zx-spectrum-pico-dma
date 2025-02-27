@@ -18,6 +18,8 @@
  */
 
 /*
+ * ZX Spectrum DMA experimentation. Background info at https://worldofspectrum.org/faq/reference/48kreference.htm
+ *
  * cmake -DCMAKE_BUILD_TYPE=Debug ..
  * make -j10
  * sudo openocd -f interface/cmsis-dap.cfg -f target/rp2350.cfg -c "program ./zx_dma_rp2350b.elf verify reset exit"
@@ -37,7 +39,6 @@
 #include "hardware/clocks.h"
 #include "pico/multicore.h"
 
-
 #include "gpios.h"
 
 //#define OVERCLOCK 270000
@@ -53,16 +54,11 @@ static void test_blipper( void )
 }
 
 /*
- * https://worldofspectrum.org/faq/reference/48kreference.htm
- */
-
-/*
  * Local copy of the ZX display file. Pixel data is 256x192 pixels,
  * at 8 pixels per byte. Colour attributes are 32x24 bytes
  */
-static uint8_t zx_screen_mirror[((256*192)/8) + (32*24)];
-static uint16_t a_log[100000];
-static uint32_t a_log_ctr = 0;
+#define ZX_DISPLAY_FILE_SIZE ((256*192)/8) + (32*24)
+static uint8_t zx_screen_mirror[ZX_DISPLAY_FILE_SIZE];
 
 /*
  * This handler is called when the ULA pings the /INT line.
@@ -115,20 +111,13 @@ void int_handler( uint gpio, uint32_t events )
   const uint32_t write_address = 0x4000;
 
   uint32_t byte_counter;
-  for( byte_counter=0; byte_counter < 6912; byte_counter++ )
+  for( byte_counter=0; byte_counter < ZX_DISPLAY_FILE_SIZE; byte_counter++ )
   {
     /*
-     * With full Z80 synchronisation a 2048 byte DMA transfer takes 2.9ms.
-     * Removing all the Z80 synchronisation stuff and putting in a fairly
-     * precise pause tuned to the 150ns DRAM in the Spectrum results in a
-     * 2048 byte DMA transfer in 1.850ms.
-     * Top border time is 4.096ms, so the target for a 2048 transfer (a
-     * third of the screen) is 4.096/3 which is 1.37ms.
-     * Using the lower border, 6.325ms/3 is 2.108ms, which I'm now inside.
-     *
-     * So, use the lower border and my current performance is 5.55ms for
-     * the whole screen, which is inside the 6.325 total border time.
-     * In theory.
+     * A full screen (6,912 byte) DMA transfer (with the static RAM timings
+     * below) takes 2.37ms.
+     * Top border time is 4.096ms, so DMAing a full screen is easily done
+     * inside the time it takes the ULA to draw the top border.
      */
 
     /* Set address of ZX byte to write to */
@@ -140,7 +129,10 @@ void int_handler( uint gpio, uint32_t events )
     /* Put value on the data bus */
     gpio_put_masked( GPIO_DBUS_BITMASK, zx_screen_mirror[byte_counter]);
 
-    /* Assert the write line to write it */
+    /*
+     * Assert the write line to write it, the ULA responds to this and does
+     * the write into the Spectrum's memory. i.e. the RAS/CAS stuff.
+     */
     gpio_put( GPIO_Z80_WR, 0 );
 
     /*
@@ -163,8 +155,8 @@ void int_handler( uint gpio, uint32_t events )
    * machine is the longer this delay needs to be - but again, this is with a
    * static RAM module.
    * 
-   * I've currently go this at 35/150,000,000ths of a second. This seems
-   * reliable. A transfer of 6,912 bytes at this speed takes 2.18ms.
+   * I've currently got this at 35/150,000,000ths of a second. This seems
+   * reliable. A transfer of 6,912 bytes at this speed takes 2.37ms.
    */
     __asm volatile ("nop");
     __asm volatile ("nop");
@@ -216,7 +208,7 @@ void int_handler( uint gpio, uint32_t events )
     gpio_put( GPIO_Z80_MREQ, 1 ); 
   }
 
-  /* Put the address, data and control buses back to hi-Z */
+  /* DMA complete - put the address, data and control buses back to hi-Z */
   gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
   gpio_set_dir_in_masked( GPIO_DBUS_BITMASK );
 
@@ -225,11 +217,7 @@ void int_handler( uint gpio, uint32_t events )
   gpio_set_dir( GPIO_Z80_IORQ, GPIO_IN );
   gpio_set_dir( GPIO_Z80_RD,   GPIO_IN );
 
-  /*
-   * DMA complete.
-   *
-   * Release bus request
-   */
+  /* Release bus request */
   gpio_put( GPIO_Z80_BUSREQ, 1 );
 
   /* Indicate DMA process complete */
@@ -238,6 +226,12 @@ void int_handler( uint gpio, uint32_t events )
   return;
 }
 
+/*
+ * Alarm handler, sets the handler for the /INT signal running.
+ * That can't start immediately because running the DMA stuff
+ * as soon as the Spectrum starts messes up the ROM's memory
+ * check as the Spectrum boots.
+ */
 int64_t start_dma_running( alarm_id_t id, void *user_data )
 {
   gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_handler );
@@ -301,40 +295,35 @@ void main( void )
   /* Let the Spectrum run and do its RAM check before we start interferring */
   gpio_put( GPIO_RESET_Z80, 0 );
 
+  /* The DMA stuff starts in a few seconds */
   add_alarm_in_ms( 3000, start_dma_running, NULL, 0 );
 
   /*
    * The IRQ handler stuff is nowhere near fast enough to handle this. The Z80's
-   * write is finished long before the RP2350 even gets to call the handler function
+   * write is finished long before the RP2350 even gets to call the handler function.
+   * So, tight loop in the main core for now.
    */
   while( 1 )
   {
     register uint64_t gpios = gpio_get_all64();
 
+    /* A memory write is when mem-request and write are both low */
     const uint64_t WR_MREQ_MASK = (0x01 << GPIO_Z80_MREQ) | (0x01 << GPIO_Z80_WR);
 
     if( (gpios & WR_MREQ_MASK) == 0 )
     {
-       gpio_put( GPIO_BLIPPER2, 1 );
-      __asm volatile ("nop");
-      __asm volatile ("nop");
-      gpio_put( GPIO_BLIPPER2, 0 );
-
       /* It's a write to memory, find the address being written to */
       uint64_t address = (gpios & (0xFFFF << GPIO_ABUS_A0)) >> GPIO_ABUS_A0;
 
+      /* For this example I'm only interested in writes to the display file */
       const uint64_t display_first_byte = 0x4000;
       const uint64_t display_last_byte  = 0x5AFF;
 
       if( (address >= display_first_byte) && (address <= display_last_byte) )
       {
+        /* Pick the value being written from the data bus and mirror it */
         uint8_t data = (gpios & (0xFF << GPIO_DBUS_D0)) >> GPIO_DBUS_D0;
-        zx_screen_mirror[address-display_first_byte] = (data & 0xff);
-
-       gpio_put( GPIO_BLIPPER2, 1 );
-      __asm volatile ("nop");
-      __asm volatile ("nop");
-      gpio_put( GPIO_BLIPPER2, 0 );
+        zx_screen_mirror[address-display_first_byte] = data;
       }
 
       /* Wait for the Z80 write to finish */
