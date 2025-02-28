@@ -57,7 +57,9 @@ static void test_blipper( void )
  * Local copy of the ZX display file. Pixel data is 256x192 pixels,
  * at 8 pixels per byte. Colour attributes are 32x24 bytes
  */
-#define ZX_DISPLAY_FILE_SIZE ((256*192)/8) + (32*24)
+#define ZX_DISPLAY_FILE_PIXEL_SIZE     ((256*192)/8)
+#define ZX_DISPLAY_FILE_ATTRIBUTE_SIZE (32*24)
+#define ZX_DISPLAY_FILE_SIZE           (ZX_DISPLAY_FILE_PIXEL_SIZE + ZX_DISPLAY_FILE_ATTRIBUTE_SIZE)
 static uint8_t zx_screen_mirror[ZX_DISPLAY_FILE_SIZE];
 
 /*
@@ -70,6 +72,7 @@ static uint8_t zx_screen_mirror[ZX_DISPLAY_FILE_SIZE];
  *
  * The top border is 64 lines, each line being 224Ts.
  */
+static uint32_t activate_demo = 0;
 void int_handler( uint gpio, uint32_t events ) 
 {
   /*
@@ -80,7 +83,61 @@ void int_handler( uint gpio, uint32_t events )
    * the Spectrum still works even without this. So I'm not quite sure how
    * necessary it is.
    */
+#define TESTING_FROM_BASIC 0
+#if TESTING_FROM_BASIC  
   busy_wait_ms(1);
+#endif
+
+  /*
+   * Scroll left, just to show something happening. This takes about
+   * 465us on an un-overclocked RP2350b
+   */
+  if( activate_demo > 0 )
+  {
+    gpio_put( GPIO_BLIPPER2, 1 );
+
+     /* Work down the screen lines */
+    for( uint32_t scan_line = 0; scan_line < 192; scan_line++ )
+    {
+      uint8_t *scan_data = (zx_screen_mirror + (scan_line*32));
+
+      /* Pick up the 0/1 value of the pixel at extreme left */
+      uint8_t left_pixel = ((*scan_data & 0x80) == 0x80);
+
+      /* Copy it ready for inserting at extreme right */
+      uint8_t right_pixel = left_pixel;
+
+      /* Work across the 32 bytes of the line, right to left */
+      for( int32_t char_count = 31; char_count >= 0; char_count-- )
+      {
+        /*
+         * Pick up the byte value, note and store the leftmost pixel 0/1 value
+         * (which is about to be scrolled out of this byte)
+         */
+        uint8_t pixel_byte = *(scan_data+char_count);
+        left_pixel = ((pixel_byte & 0x80) == 0x80);
+
+        /*
+         * Rotate the value and put the leftmost pixel from the previous byte
+         * (the one to this byte's right) into the right side
+         */
+        pixel_byte = pixel_byte << 1;
+        pixel_byte &= 0xFE;
+        pixel_byte |= right_pixel;
+        
+        /*
+         * Store that leftmost pixel ready for putting it into the right
+         * side of the next byte
+         */
+        right_pixel = left_pixel;
+
+        /* Load the rotated byte back into the mirror */
+        *(scan_data+char_count) = pixel_byte;
+      }
+    }
+
+    gpio_put( GPIO_BLIPPER2, 0 );
+  }
 
   /* Assert bus request */
   gpio_put( GPIO_Z80_BUSREQ, 0 );
@@ -226,6 +283,13 @@ void int_handler( uint gpio, uint32_t events )
   return;
 }
 
+int64_t scroll_display( alarm_id_t id, void *user_data )
+{
+  /* Set the demo code in the /INT handler running */
+  activate_demo = 1;
+  return 0;
+}
+
 /*
  * Alarm handler, sets the handler for the /INT signal running.
  * That can't start immediately because running the DMA stuff
@@ -234,7 +298,14 @@ void int_handler( uint gpio, uint32_t events )
  */
 int64_t start_dma_running( alarm_id_t id, void *user_data )
 {
+  /*
+   * When the ULA pulls /INT low at the start of the frame, dump my
+   * mirror of the display file into the Spectrum's live display
+   */
   gpio_set_irq_enabled_with_callback( GPIO_Z80_INT, GPIO_IRQ_EDGE_FALL, true, &int_handler );
+
+  /* Demo it's working */
+  add_alarm_in_ms( 10000, scroll_display, NULL, 0 );
 
   return 0;
 }
@@ -292,6 +363,10 @@ void main( void )
   /* Initialise Z80 address bus GPIOs as inputs */
   gpio_init_mask( GPIO_ABUS_BITMASK );  gpio_set_dir_in_masked( GPIO_ABUS_BITMASK );
 
+  /* Zero mirror memory */
+  for( uint32_t i=0; i < ZX_DISPLAY_FILE_SIZE; i++)
+    zx_screen_mirror[i]=0;
+
   /* Let the Spectrum run and do its RAM check before we start interferring */
   gpio_put( GPIO_RESET_Z80, 0 );
 
@@ -313,7 +388,7 @@ void main( void )
     if( (gpios & WR_MREQ_MASK) == 0 )
     {
       /* It's a write to memory, find the address being written to */
-      uint64_t address = (gpios & (0xFFFF << GPIO_ABUS_A0)) >> GPIO_ABUS_A0;
+      uint64_t address = (gpios & GPIO_ABUS_BITMASK) >> GPIO_ABUS_A0;
 
       /* For this example I'm only interested in writes to the display file */
       const uint64_t display_first_byte = 0x4000;
@@ -322,7 +397,7 @@ void main( void )
       if( (address >= display_first_byte) && (address <= display_last_byte) )
       {
         /* Pick the value being written from the data bus and mirror it */
-        uint8_t data = (gpios & (0xFF << GPIO_DBUS_D0)) >> GPIO_DBUS_D0;
+        uint8_t data = (gpios & GPIO_DBUS_BITMASK) & 0xFF;
         zx_screen_mirror[address-display_first_byte] = data;
       }
 
