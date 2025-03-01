@@ -34,7 +34,9 @@ project. I used a [Pimoroni Stamp XL](https://shop.pimoroni.com/products/rp2350-
 
 I designed a board and had it made up. It looks like this:
 
-???
+![alt text](images/rp2350_zx.jpg "Board in ZX")
+
+![alt text](images/rp235_detail.jpg "Board in ZX")
 
 It's very simple, the Stamp XL runs off 5V so doesn't need any extra circuitry other
 than a transistor to control the Z80's RESET line.
